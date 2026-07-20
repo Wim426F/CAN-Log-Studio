@@ -1,5 +1,7 @@
 # CAN Log Studio
 
+![CAN Log Studio](CAN-log-studio.png)
+
 A browser-based tool for analyzing automotive CANbus logs. Load your DBC files and a captured log, decode the signals, and plot them on a multi-axis time graph.
 
 It is a single self-contained HTML file. There is nothing to install and it works offline.
