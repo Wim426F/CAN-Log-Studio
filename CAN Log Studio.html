@@ -1,0 +1,1115 @@
+<!doctype html>
+<!--
+  This file is part of the CAN Log Studio project.
+
+  Copyright (C) 2026 Wim Boone <wim.boone@outlook.com>
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAN Log Studio</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f0f2f5; --line:#e2e6eb; --line2:#d2d8e0;
+    --ink:#1f2733; --ink2:#5a6675; --ink3:#8b95a3; --accent:#1565c0; --accent-bg:#e8f1fb;
+    --good:#2e7d32; --grid:#edf0f4; --spine:#c7cdd6;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --ui:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);font-size:13px;
+       display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+  header{display:flex;align-items:center;gap:14px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .brand{display:flex;align-items:baseline;gap:8px;font-weight:600;letter-spacing:.2px}
+  .brand .dot{width:9px;height:9px;border-radius:2px;background:var(--accent);display:inline-block;transform:translateY(1px)}
+  .brand small{font-weight:400;color:var(--ink3);font-family:var(--mono);font-size:11px;letter-spacing:0}
+  .drops{display:flex;gap:8px;margin-left:6px}
+  .drop{display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px dashed var(--line2);
+        border-radius:7px;cursor:pointer;color:var(--ink2);background:var(--panel2);white-space:nowrap;transition:.12s}
+  .drop:hover{border-color:var(--accent);color:var(--ink)}
+  .drop.over{border-color:var(--accent);background:var(--accent-bg);color:var(--ink)}
+  .drop.ok{border-style:solid;border-color:var(--good);color:var(--ink);background:#f1f8f1}
+  .drop b{font-weight:600}
+  .drop .meta{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+  .spacer{flex:1}
+  .status{font-family:var(--mono);font-size:11px;color:var(--ink3);white-space:nowrap}
+  .btn{padding:5px 11px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);
+       color:var(--ink);cursor:pointer;font-family:var(--ui);font-size:12px;transition:.12s}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn:disabled{opacity:.45;cursor:default;color:var(--ink2)}
+  .body{display:grid;grid-template-columns:262px 1fr;min-height:0}
+  aside{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .side-head{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+  .side-head h2{margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--ink2)}
+  .search{width:100%;padding:7px 9px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;
+          color:var(--ink);font-family:var(--ui);font-size:12px}
+  .search::placeholder{color:var(--ink3)}
+  .tree{overflow:auto;flex:1;padding:6px 6px 40px}
+  .empty{color:var(--ink3);padding:18px 12px;line-height:1.6;font-size:12px}
+  .msg-grp{margin:2px 0 6px}
+  .msg-h{display:flex;align-items:center;gap:6px;padding:5px 6px;cursor:pointer;border-radius:5px;color:var(--ink2);user-select:none}
+  .msg-h:hover{background:var(--panel2)}
+  .msg-h .tw{width:9px;color:var(--ink3);transition:transform .12s;font-family:var(--mono)}
+  .msg-h.collapsed .tw{transform:rotate(-90deg)}
+  .msg-h .nm{font-weight:600;color:var(--ink)}
+  .msg-h .id{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .msg-h .cnt{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .sig{display:flex;align-items:center;gap:8px;padding:5px 8px 5px 22px;border-radius:5px;cursor:pointer;transition:.1s}
+  .sig:hover{background:var(--panel2)}
+  .sig .sw{width:10px;height:10px;border-radius:2px;border:1px solid var(--line2);flex:none;background:transparent}
+  .sig.on .sw{border-color:transparent}
+  .sig .sn{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sig.on .sn{font-weight:600}
+  .sig .un{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3);flex:none}
+  main{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .toolbar .tip{margin-left:auto;color:var(--ink3);font-size:11px;font-family:var(--mono)}
+  .plotwrap{flex:1;min-height:0;position:relative;padding:8px;background:var(--panel)}
+  #cv{width:100%;height:100%;display:block;cursor:crosshair}
+  .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+               color:var(--ink3);text-align:center;line-height:1.8;pointer-events:none;font-size:13px;gap:2px}
+  .placeholder kbd{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line2);border-radius:4px;padding:1px 5px;color:var(--ink2)}
+  #progress{position:absolute;left:0;right:0;top:0;height:2px;background:transparent;z-index:3}
+  #progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
+  .legend{border-top:1px solid var(--line);background:var(--panel);padding:7px 12px;min-height:34px;
+          font-family:var(--mono);font-size:11px;color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
+  .overview{height:58px;flex:none;border-top:1px solid var(--line);background:var(--panel);padding:5px 8px 4px}
+  #ov{width:100%;height:100%;display:block}
+  .legend .t{color:var(--ink3)}
+  .legend .it{display:inline-flex;align-items:center;gap:5px}
+  .legend .it .m{width:10px;height:10px;border-radius:2px;flex:none}
+  .legend .it .v{color:var(--ink);font-weight:600}
+  .legend .hint{color:var(--ink3)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#d3d9e0;border-radius:6px;border:2px solid var(--panel)}
+  /* ---- derived channels ---- */
+  .derived-grp .msg-h .nm{color:var(--accent)}
+  .msg-h .addd{margin-left:auto;font-family:var(--ui);font-size:11px;color:var(--accent);cursor:pointer;padding:1px 7px;border:1px solid var(--line2);border-radius:5px}
+  .msg-h .addd:hover{background:var(--accent-bg);border-color:var(--accent)}
+  .empty2{color:var(--ink3);font-size:11px;line-height:1.7;padding:2px 8px 8px 22px}
+  .empty2 code{font-family:var(--mono);background:var(--panel2);padding:1px 4px;border-radius:3px;color:var(--ink2)}
+  .sig .qd{margin-left:8px;font-family:var(--mono);font-size:12px;line-height:16px;color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:0 6px;cursor:pointer;opacity:0;transition:.1s;flex:none}
+  .sig:hover .qd{opacity:1}
+  .sig .qd:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-bg)}
+  .sig .rowtools{margin-left:8px;display:inline-flex;gap:3px;opacity:0;transition:.1s;flex:none}
+  .sig:hover .rowtools{opacity:1}
+  .sig .rt{font-size:11px;line-height:16px;color:var(--ink3);cursor:pointer;border:1px solid var(--line2);border-radius:4px;padding:0 6px}
+  .sig .rt:hover{color:var(--accent);border-color:var(--accent)}
+  .sig.err .sn{color:#c0392b;text-decoration:underline dotted}
+  /* ---- modal ---- */
+  .modal{position:fixed;inset:0;background:rgba(20,28,38,.32);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal.hidden{display:none}
+  .card{background:var(--panel);border:1px solid var(--line2);border-radius:12px;width:min(600px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(20,28,38,.25);overflow:hidden}
+  .card-b2{overflow:auto}
+  .btn.on{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+  .side-head .hrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .side-head .hrow h2{margin:0}
+  .side-head .colb{margin-left:auto;font-size:11px;color:var(--ink2);cursor:pointer;border:1px solid var(--line2);border-radius:5px;padding:2px 8px;background:var(--panel2);white-space:nowrap}
+  .side-head .colb:hover{border-color:var(--accent);color:var(--accent)}
+  .legend .meas{color:var(--ink3)}
+  .legend .it .d{color:var(--accent);font-weight:600}
+  .card-h{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);font-weight:600}
+  .card-h .x{margin-left:auto;cursor:pointer;color:var(--ink3);font-size:16px;line-height:1}
+  .card-h .x:hover{color:var(--ink)}
+  .card-b{padding:14px 16px;display:flex;flex-direction:column;gap:11px;overflow:auto;flex:1}
+  .frow{display:flex;align-items:center;gap:10px}
+  .frow.col{flex-direction:column;align-items:stretch;gap:6px}
+  .frow > label{width:84px;color:var(--ink2);font-size:12px;flex:none}
+  .frow input,.card textarea{flex:1;padding:7px 9px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;color:var(--ink);font-family:var(--ui);font-size:13px}
+  .card textarea{font-family:var(--mono);min-height:54px;resize:vertical;width:100%}
+  .card textarea:focus,.frow input:focus{outline:none;border-color:var(--accent)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;overflow:auto;align-items:center;align-content:flex-start}
+  #dFuncs{max-height:74px}
+  #dSigs{max-height:300px;min-height:130px;align-content:flex-start}
+  .chips .lbl{width:100%;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink3);margin:0 0 1px}
+  .chip{font-family:var(--mono);font-size:11px;padding:2px 7px;border:1px solid var(--line2);border-radius:5px;cursor:pointer;color:var(--ink2);background:var(--panel2)}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .chip.fn{color:var(--accent)}
+  .derr{color:#c0392b;font-size:12px;font-family:var(--mono);min-height:16px}
+  .card-f{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+  .card-f .spacer{flex:1}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.06);color:#fff}
+  .btn.danger{border-color:#e2b4b4;color:#c0392b}
+  .btn.danger:hover{background:#fbecec;color:#c0392b}
+  .hidden{display:none}
+  /* ---- bus grouping + DBC manager ---- */
+  .bus-h{margin:8px 6px 3px;padding:3px 6px;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .bus-h span{font-weight:400;color:var(--ink3);font-family:var(--mono);text-transform:none;letter-spacing:0}
+  .dbchint{font-size:12px;color:var(--ink2);line-height:1.5;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+  .dbc-row{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--line)}
+  .dord{display:flex;flex-direction:column;line-height:.8;gap:1px}
+  .dord .ob{cursor:pointer;color:var(--ink3);font-size:9px;user-select:none}
+  .dord .ob:hover{color:var(--accent)}
+  .dord .ob.dis{opacity:.25;pointer-events:none}
+  .dname{flex:1;font-family:var(--mono);font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dbus{padding:5px 7px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;color:var(--ink);font-family:var(--ui);font-size:12px;cursor:pointer}
+  .dbus:focus{outline:none;border-color:var(--accent)}
+  .drm{cursor:pointer;color:var(--ink3);border:1px solid var(--line2);border-radius:5px;padding:1px 7px;font-size:12px}
+  .drm:hover{color:#c0392b;border-color:#e2b4b4}
+  .addfiles{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:7px 12px;border:1px dashed var(--line2);border-radius:7px;cursor:pointer;color:var(--accent);font-size:12px}
+  .addfiles:hover{border-color:var(--accent);background:var(--accent-bg)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>CAN Log Studio <small>v1.2</small></div>
+  <div class="drops">
+    <div class="drop" id="dropDbc" title="Manage DBC files and bus assignment — or drop .dbc files here">
+      <span>⚙ <b>DBCs</b></span><span class="meta" id="dbcMeta">none</span>
+    </div>
+    <label class="drop" id="dropCsv">
+      <span>+ <b>log CSV</b></span><span class="meta" id="csvMeta">none</span>
+      <input type="file" accept=".csv,.txt,.log" hidden id="fileCsv">
+    </label>
+  </div>
+  <div class="spacer"></div>
+  <div class="status" id="status">drop a DBC + a SavvyCAN CSV to begin</div>
+</header>
+
+<div class="body">
+  <aside>
+    <div class="side-head">
+      <div class="hrow"><h2>Signals</h2><span class="colb" id="collapseAll" title="Collapse or expand all messages">collapse all</span></div>
+      <input class="search" id="search" placeholder="filter signals…" autocomplete="off">
+    </div>
+    <div class="tree" id="tree">
+      <div class="empty">No log loaded yet.<br>Load a <b>DBC</b> and a <b>log CSV</b> — the signals defined for the message IDs found in your log will appear here.</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <button class="btn" id="btnFit" disabled>Fit all</button>
+      <button class="btn" id="btnClear" disabled>Clear plot</button>
+      <button class="btn" id="btnPng" disabled>Export PNG</button>
+      <button class="btn" id="btnMeasure" disabled>Measure</button>
+      <span class="tip">scroll plot = zoom to cursor · scroll an axis = scale that axis · drag = pan · dbl-click = reset</span>
+    </div>
+    <div class="plotwrap" id="plotwrap">
+      <div id="progress"><i></i></div>
+      <canvas id="cv"></canvas>
+      <div class="placeholder" id="ph">
+        <div>Pick a signal on the left to plot it.</div>
+        <div>Each unit gets its own vertical axis — time is always the X axis.</div>
+        <div style="font-size:11px">tip: load <kbd>sample.dbc</kbd> + <kbd>sample_log.csv</kbd> to try it out</div>
+      </div>
+    </div>
+    <div class="overview" id="overview"><canvas id="ov"></canvas></div>
+    <div class="legend" id="legend"><span class="hint">hover the plot to read values at the cursor</span></div>
+  </main>
+</div>
+
+<div class="modal hidden" id="dbcModal">
+  <div class="card">
+    <div class="card-h"><span>DBC files &amp; bus assignment</span><span class="x" id="dbcClose">✕</span></div>
+    <div class="card-b">
+      <div class="dbchint" id="dbcHint"></div>
+      <div id="dbcList"></div>
+      <div><label class="addfiles" id="dbcAddBtn">+ Add DBC files<input type="file" accept=".dbc" multiple hidden id="dbcAddInput"></label></div>
+    </div>
+    <div class="card-f"><span class="spacer"></span><button class="btn primary" id="dbcDone">Done</button></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="derivedModal">
+  <div class="card">
+    <div class="card-h"><span id="dTitle">New derived channel</span><span class="x" id="dClose">✕</span></div>
+    <div class="card-b">
+      <div class="frow"><label>Name</label><input id="dName" placeholder="e.g. Power" autocomplete="off"></div>
+      <div class="frow"><label>Unit</label><input id="dUnit" placeholder="e.g. W   (optional)" autocomplete="off"></div>
+      <div class="frow col"><label>Expression</label><textarea id="dExpr" spellcheck="false" placeholder="PackVoltage * PackCurrent        — or —        delta(SomeCounter)"></textarea></div>
+      <input class="search" id="dSearch" placeholder="filter signals & functions…" autocomplete="off">
+      <div class="chips" id="dFuncs"></div>
+      <div class="chips" id="dSigs"></div>
+      <div class="derr" id="dErr"></div>
+    </div>
+    <div class="card-f">
+      <button class="btn danger hidden" id="dDelete">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" id="dCancel">Cancel</button>
+      <button class="btn primary" id="dSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================= *
+ *  CAN Log Studio — browser-only CAN log analyzer (v1.1)
+ *  No external dependencies: DBC parse + SavvyCAN/GVRET CSV stream
+ *  parse into typed arrays + on-demand decode + viewport decimation
+ *  + a self-contained <canvas> multi-axis plotting engine.
+ * ============================================================= */
+
+const PALETTE = ["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e",
+                 "#17becf","#e377c2","#8c564b","#7f7f7f","#bcbd22",
+                 "#1565c0","#c2185b"];
+
+let DBCS = [];    // ordered list: [{name, parsed:{messages,valTables}, scope:'all'|<int bus>}]  — order = priority
+let activeMsg = new Map();   // busKey -> {bus, id, msg, dbc}   (winner per bus+id, recomputed on change)
+let activeByBus = new Map(); // bus -> [{id, msg, dbc}] sorted by id (for the sidebar)
+let LOG = null;   // { time:Float64Array, id:Uint32Array, bus:Uint8Array, data:Uint8Array(stride8), n, byKey:Map(busKey->Uint32Array), buses:[..], tmax }
+let CH  = [];     // plotted channels [{key,bus,id,name,unit,sig,valTable,color,xs,ys,derived?}]
+const CACHE = new Map();
+let DERIVED = []; let derivedSeq = 1; let editingId = null; let evaluatingName = null;   // user-defined derived channels
+let colorPool = PALETTE.slice();
+function busKey(bus,id){ return bus*0x20000000 + (id&0x1FFFFFFF); }   // pack (bus,id) into one Number key
+let view = null;  // [xmin,xmax] seconds
+
+/* ---------------- DBC parser (verified) ---------------- */
+function parseDBC(text){
+  const messages = new Map(); const valTables = new Map(); let cur = null;
+  const lines = text.split(/\r?\n/);
+  const reSG = /^\s*SG_\s+([\w]+)\s*(?:(M|m\d+)\s+)?:\s*(\d+)\|(\d+)@([01])([+\-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]*)\|([^\]]*)\]\s*"([^"]*)"/;
+  for (let raw of lines){
+    if (raw.startsWith("BO_")){
+      const m = raw.match(/^BO_\s+(\d+)\s+([\w]+)\s*:\s*(\d+)/);
+      if (m){ cur = { id:(parseInt(m[1],10)&0x1FFFFFFF), name:m[2], dlc:+m[3], signals:[], mux:null }; messages.set(cur.id,cur);} else cur=null;
+    } else if (raw.trimStart().startsWith("SG_")){
+      const m = raw.match(reSG);
+      if (m && cur){
+        const sig={name:m[1],muxRole:m[2]||null,muxVal:(m[2]&&m[2][0]==='m')?parseInt(m[2].slice(1),10):null,
+          start:+m[3],len:+m[4],order:+m[5],signed:m[6]==='-',factor:parseFloat(m[7]),offset:parseFloat(m[8]),
+          min:parseFloat(m[9]),max:parseFloat(m[10]),unit:(m[11]||"").trim()};
+        cur.signals.push(sig); if (sig.muxRole==="M") cur.mux=sig;
+      }
+    } else if (raw.startsWith("VAL_")){
+      const m = raw.match(/^VAL_\s+(\d+)\s+([\w]+)\s+(.*?)\s*;?\s*$/);
+      if (m){ const map=new Map(); const re=/(-?\d+)\s+"([^"]*)"/g; let mm;
+        while ((mm=re.exec(m[3]))) map.set(parseInt(mm[1],10),mm[2]); valTables.set(m[2],map); }
+    }
+  }
+  return { messages, valTables };
+}
+
+/* ---------------- bit extraction (verified against Python round-trip) ---------------- */
+function rawAt(data, base, s){
+  let val=0;
+  if (s.order===1){ for (let i=0;i<s.len;i++){ const bp=s.start+i,by=base+(bp>>3),bit=bp&7; val+=((data[by]>>bit)&1)*Math.pow(2,i);} }
+  else { let by=base+(s.start>>3),bit=s.start&7; for (let i=0;i<s.len;i++){ val=val*2+((data[by]>>bit)&1); if(bit===0){bit=7;by++;}else bit--; } }
+  if (s.signed && val>=Math.pow(2,s.len-1)) val-=Math.pow(2,s.len);
+  return val*s.factor+s.offset;
+}
+function decodeSignal(bkey, msg, sig){
+  const ckey = bkey+":"+sig.name;
+  if (CACHE.has(ckey)) return CACHE.get(ckey);
+  const idx = LOG.byKey.get(bkey);
+  if (!idx){ const e={xs:new Float64Array(0),ys:new Float64Array(0)}; CACHE.set(ckey,e); return e; }
+  const m = idx.length; const xs=new Float64Array(m), ys=new Float64Array(m);
+  const muxSig=(sig.muxVal!=null)?msg.mux:null; let k=0;
+  for (let j=0;j<m;j++){ const f=idx[j],base=f*8;
+    if (muxSig){ const mv=rawAt(LOG.data,base,{start:muxSig.start,len:muxSig.len,order:muxSig.order,signed:false,factor:1,offset:0}); if (Math.round(mv)!==sig.muxVal) continue; }
+    xs[k]=LOG.time[f]; ys[k]=rawAt(LOG.data,base,sig); k++;
+  }
+  const out=(k===m)?{xs,ys}:{xs:xs.slice(0,k),ys:ys.slice(0,k)};
+  CACHE.set(ckey,out); return out;
+}
+/* Resolve, per (bus,id) present in the log, which DBC wins:
+   first DBC in list order whose scope is 'all' or == bus AND that defines the id. */
+function resolveActive(){
+  activeMsg=new Map(); activeByBus=new Map();
+  if(!LOG) return;
+  for(const key of LOG.byKey.keys()){
+    const bus=Math.floor(key/0x20000000), id=key%0x20000000;
+    let win=null;
+    for(const d of DBCS){ if((d.scope==='all'||d.scope===bus) && d.parsed.messages.has(id)){ win=d; break; } }
+    if(win){ const msg=win.parsed.messages.get(id); activeMsg.set(key,{bus,id,msg,dbc:win});
+      let arr=activeByBus.get(bus); if(!arr){arr=[];activeByBus.set(bus,arr);} arr.push({id,msg,dbc:win}); }
+  }
+  for(const arr of activeByBus.values()) arr.sort((a,b)=>a.id-b.id);
+}
+
+/* ---------------- CSV (SavvyCAN / GVRET) streaming parser ---------------- */
+async function parseCSV(file, onProgress){
+  const reader = file.stream().getReader();
+  const dec = new TextDecoder();
+  let cap=1<<16; let time=new Float64Array(cap),id=new Uint32Array(cap),bus=new Uint8Array(cap),data=new Uint8Array(cap*8);
+  let n=0,t0=null,dirCol=null,read=0; const total=file.size||1; const byKey=new Map(); const busesSeen=new Set();
+  function grow(){const nc=cap*2;const t2=new Float64Array(nc);t2.set(time);time=t2;const i2=new Uint32Array(nc);i2.set(id);id=i2;const u2=new Uint8Array(nc);u2.set(bus);bus=u2;const d2=new Uint8Array(nc*8);d2.set(data);data=d2;cap=nc;}
+  function line(ln){
+    if(!ln) return; const c0=ln.charCodeAt(0); if(!(c0>=48&&c0<=57)) return;
+    const f=ln.split(","); if(f.length<5) return;
+    const tsStr=f[0]; const ts=tsStr.indexOf(".")>=0?parseFloat(tsStr):parseInt(tsStr,10)/1e6;
+    let rid=parseInt(f[1].replace(/^0x/i,""),16); if(isNaN(ts)||isNaN(rid)) return; rid&=0x1FFFFFFF;
+    if(dirCol===null) dirCol=/^[rt]x$/i.test((f[3]||"").trim());
+    const busIdx=dirCol?4:3, lenIdx=dirCol?5:4;
+    let bb=parseInt(f[busIdx],10); if(isNaN(bb)||bb<0)bb=0; if(bb>255)bb=255;
+    let len=parseInt(f[lenIdx],10); if(isNaN(len))len=8; len=Math.max(0,Math.min(8,len));
+    const b0=lenIdx+1; if(n>=cap)grow(); if(t0===null)t0=ts;
+    time[n]=ts-t0; id[n]=rid; bus[n]=bb; busesSeen.add(bb); const base=n*8;
+    for(let k=0;k<8;k++) data[base+k]=(k<len)?(parseInt(f[b0+k],16)||0):0;
+    const key=bb*0x20000000+rid; let arr=byKey.get(key); if(!arr){arr=[];byKey.set(key,arr);} arr.push(n); n++;
+  }
+  let rem="";
+  while(true){
+    const {done,value}=await reader.read(); if(done) break;
+    read+=value.length; if(onProgress) onProgress(read/total);
+    rem+=dec.decode(value,{stream:true});
+    const parts=rem.split("\n"); rem=parts.pop();
+    for(let i=0;i<parts.length;i++){ let p=parts[i]; if(p.charCodeAt(p.length-1)===13)p=p.slice(0,-1); line(p); }
+  }
+  if(rem){ if(rem.charCodeAt(rem.length-1)===13)rem=rem.slice(0,-1); line(rem); }
+  const byKeyT=new Map(); for(const[k,a]of byKey) byKeyT.set(k,Uint32Array.from(a));
+  return {time,id,bus,data,n,byKey:byKeyT,buses:[...busesSeen].sort((a,b)=>a-b),tmax:n?time[n-1]:0};
+}
+
+/* ---------------- small helpers ---------------- */
+const $ = s => document.querySelector(s);
+function fmtNum(v){ if(v==null||Number.isNaN(v))return"–"; const a=Math.abs(v); if(a!==0&&(a<0.01||a>=1e5))return v.toExponential(2); return (Math.round(v*1000)/1000).toString(); }
+function fmtTime(s){ if(s==null)return"–"; const tm=LOG?LOG.tmax:s; if(tm>=120){const m=Math.floor(s/60),ss=s-m*60;return m+":"+(ss<10?"0":"")+ss.toFixed(1);} return s.toFixed(tm<10?2:1); }
+function fmtTick(v){ if(v===0)return"0"; const a=Math.abs(v); if(a>=1e5||a<1e-3)return v.toExponential(1); let s=v.toPrecision(4); if(s.indexOf(".")>=0)s=s.replace(/\.?0+$/,""); return s; }
+function lowerBound(xs,x){ let lo=0,hi=xs.length-1,r=-1; while(lo<=hi){const mid=(lo+hi)>>1; if(xs[mid]<=x){r=mid;lo=mid+1;}else hi=mid-1;} return r; }
+function niceTicks(min,max,n){
+  if(min===max){min-=1;max+=1;}
+  const span=max-min, step0=span/Math.max(1,n), mag=Math.pow(10,Math.floor(Math.log10(step0))), norm=step0/mag;
+  let step; if(norm<1.5)step=1; else if(norm<3)step=2; else if(norm<7)step=5; else step=10; step*=mag;
+  const start=Math.ceil(min/step)*step, out=[];
+  for(let v=start; v<=max+step*1e-6; v+=step) out.push(Math.abs(v)<step*1e-9?0:v);
+  return out;
+}
+
+/* ============================================================= *
+ *  Canvas plotting engine (multi-axis, zoom, crosshair) — no deps
+ * ============================================================= */
+const AXW = 56;                 // gutter width reserved per y-axis
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const THEME = { grid:"#edf0f4", spine:"#c7cdd6", text:"#5a6675", cross:"#9aa6b3",
+                sel:"rgba(21,101,192,0.12)", selLine:"#1565c0" };
+let DPR=1, plotW=0, plotH=0, rect={x:0,y:0,w:0,h:0};
+let groups=[], unitToGi={}, decim=null, cursorPx=null, dragSel=null;
+let axisRanges={};   // unit -> [min,max] when a Y axis has been manually zoomed (else auto-fit)
+const collapsedMsgs=new Set();          // message ids collapsed in the sidebar
+let measureMode=false, markA=null, markB=null, measDrag=null;   // two-marker measure tool
+
+function unitKey(u){ return u||"·"; }
+
+function recompute(){
+  $("#ph").style.display = CH.length ? "none" : "flex";
+  if(!CH.length||!LOG){ decim=null; groups=[]; return; }
+  if(!view) view=[0,LOG.tmax];
+  const [xmin,xmax]=view, span=(xmax-xmin)||1;
+
+  // 1) build unit groups (sides alternate L/R) and color them
+  groups=[]; unitToGi={};
+  for(const c of CH){ const u=unitKey(c.unit); if(!(u in unitToGi)){ const side=(groups.length%2===0)?"L":"R"; unitToGi[u]=groups.length; groups.push({unit:u,color:c.color,min:Infinity,max:-Infinity,side}); } }
+  const nL=groups.filter(g=>g.side==="L").length, nR=groups.filter(g=>g.side==="R").length;
+  const leftG=8+nL*AXW, rightG=8+nR*AXW;
+  rect={x:leftG,y:10,w:Math.max(60,plotW-leftG-rightG),h:Math.max(60,plotH-10-26)};
+  // assign each axis its spine x + gutter hit-band (for region-aware zoom)
+  let lo=0, ro=0;
+  for(const g of groups){ if(g.side==="L"){ g.axX=rect.x-lo*AXW; g.band=[rect.x-(lo+1)*AXW, rect.x-lo*AXW]; lo++; } else { g.axX=rect.x+rect.w+ro*AXW; g.band=[rect.x+rect.w+ro*AXW, rect.x+rect.w+(ro+1)*AXW]; ro++; } }
+
+  // 2) decimate every channel to ~pixel resolution (mean per cell + zero-order hold)
+  const N=Math.max(200,Math.min(4000,Math.round(rect.w)));
+  const grid=new Float64Array(N); for(let k=0;k<N;k++) grid[k]=xmin+span*k/(N-1);
+  const sum=new Float64Array(N), cnt=new Uint32Array(N); const series=[];
+  for(const c of CH){
+    sum.fill(0); cnt.fill(0);
+    const xs=c.xs, ys=c.ys, L=xs.length;
+    const seedIdx=lowerBound(xs,xmin); let last=seedIdx>=0?ys[seedIdx]:NaN;
+    for(let i=Math.max(0,seedIdx);i<L;i++){ const x=xs[i]; if(x<xmin)continue; if(x>xmax)break; const y=ys[i]; if(Number.isNaN(y))continue; let cell=Math.floor((x-xmin)/span*N); if(cell>=N)cell=N-1; if(cell<0)cell=0; sum[cell]+=y; cnt[cell]++; }
+    const ya=new Float64Array(N); const g=groups[unitToGi[unitKey(c.unit)]];
+    for(let k=0;k<N;k++){ if(cnt[k]>0){last=sum[k]/cnt[k];ya[k]=last;} else ya[k]=last; const v=ya[k]; if(!Number.isNaN(v)){ if(v<g.min)g.min=v; if(v>g.max)g.max=v; } }
+    series.push({ch:c,ya,gi:unitToGi[unitKey(c.unit)]});
+  }
+  for(const g of groups){
+    if(axisRanges[g.unit]){ g.min=axisRanges[g.unit][0]; g.max=axisRanges[g.unit][1]; g.manual=true; }
+    else { if(!isFinite(g.min)||!isFinite(g.max)){g.min=0;g.max=1;} const pad=(g.max-g.min)*0.06||1; g.min-=pad; g.max+=pad; g.manual=false; }
+  }
+  decim={grid,series};
+}
+
+function render(){
+  ctx.clearRect(0,0,plotW,plotH);
+  if(!decim){ renderOverview(); return; }
+  const [xmin,xmax]=view, span=(xmax-xmin)||1;
+  const xPix=t=>rect.x+(t-xmin)/span*rect.w;
+  const xt=niceTicks(xmin,xmax,Math.max(2,Math.floor(rect.w/90)));
+
+  // grid
+  ctx.lineWidth=1; ctx.strokeStyle=THEME.grid; ctx.beginPath();
+  for(const t of xt){ const x=Math.round(xPix(t))+0.5; ctx.moveTo(x,rect.y); ctx.lineTo(x,rect.y+rect.h); }
+  if(groups.length){ const g0=groups[0]; const yt=niceTicks(g0.min,g0.max,Math.max(2,Math.floor(rect.h/45)));
+    const yp=v=>rect.y+(1-(v-g0.min)/((g0.max-g0.min)||1))*rect.h;
+    for(const v of yt){ const y=Math.round(yp(v))+0.5; ctx.moveTo(rect.x,y); ctx.lineTo(rect.x+rect.w,y); } }
+  ctx.stroke();
+  ctx.strokeStyle=THEME.spine; ctx.strokeRect(rect.x+0.5,rect.y+0.5,rect.w,rect.h);
+
+  // y axes
+  ctx.font="11px ui-monospace, monospace";
+  for(let gi=0;gi<groups.length;gi++){
+    const g=groups[gi], left=g.side==="L"; const axX=g.axX;
+    const yp=v=>rect.y+(1-(v-g.min)/((g.max-g.min)||1))*rect.h;
+    ctx.strokeStyle=g.color; ctx.fillStyle=g.color;
+    ctx.lineWidth=g.manual?1.8:1;
+    ctx.beginPath(); ctx.moveTo(axX+0.5,rect.y); ctx.lineTo(axX+0.5,rect.y+rect.h); ctx.stroke();
+    ctx.lineWidth=1;
+    const yt=niceTicks(g.min,g.max,Math.max(2,Math.floor(rect.h/45)));
+    ctx.textBaseline="middle"; ctx.textAlign=left?"right":"left";
+    for(const v of yt){ const y=yp(v); ctx.beginPath(); ctx.moveTo(axX+(left?-4:0),y); ctx.lineTo(axX+(left?0:4),y); ctx.stroke(); ctx.fillText(fmtTick(v),axX+(left?-7:7),y); }
+    if(g.unit&&g.unit!=="·"){ ctx.save(); ctx.translate(left?axX-AXW+13:axX+AXW-13, rect.y+rect.h/2); ctx.rotate(-Math.PI/2); ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText((g.manual?"• ":"")+g.unit,0,0); ctx.restore(); }
+  }
+
+  // x labels
+  ctx.fillStyle=THEME.text; ctx.textAlign="center"; ctx.textBaseline="top";
+  for(const t of xt) ctx.fillText(fmtTime(t), xPix(t), rect.y+rect.h+6);
+
+  // series
+  ctx.save(); ctx.beginPath(); ctx.rect(rect.x,rect.y,rect.w,rect.h); ctx.clip();
+  for(const s of decim.series){
+    const g=groups[s.gi]; const yp=v=>rect.y+(1-(v-g.min)/((g.max-g.min)||1))*rect.h;
+    const grid=decim.grid, ya=s.ya; ctx.strokeStyle=s.ch.color; ctx.lineWidth=1.3; ctx.beginPath();
+    let started=false;
+    for(let k=0;k<grid.length;k++){ const v=ya[k]; if(Number.isNaN(v)){started=false;continue;} const x=xPix(grid[k]),y=yp(v); if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y); }
+    ctx.stroke();
+  }
+  ctx.restore();
+  drawOverlay(xPix);
+  renderOverview();
+}
+
+function plotTimeAt(px){ const [xmin,xmax]=view, span=(xmax-xmin)||1; return xmin+(Math.max(rect.x,Math.min(rect.x+rect.w,px))-rect.x)/rect.w*span; }
+function snapT(t){ // snap to the nearest actual sample across plotted channels so markers land on dots
+  let best=t, bd=Infinity;
+  for(const c of CH){ const i=lowerBound(c.xs,t); for(const j of [i,i+1]){ if(j>=0&&j<c.xs.length){ const d=Math.abs(c.xs[j]-t); if(d<bd){bd=d;best=c.xs[j];} } } }
+  return isFinite(bd)?best:t;
+}
+function nearestMarker(px){
+  const [xmin,xmax]=view, span=(xmax-xmin)||1; let best=null, bd=6;
+  for(const [k,t] of [["A",markA],["B",markB]]){ if(t==null)continue; const d=Math.abs((rect.x+(t-xmin)/span*rect.w)-px); if(d<=bd){bd=d;best=k;} }
+  return best;
+}
+function drawMarker(t,label){
+  const [xmin,xmax]=view, span=(xmax-xmin)||1; const x=rect.x+(t-xmin)/span*rect.w;
+  if(x<rect.x-1||x>rect.x+rect.w+1) return;
+  ctx.strokeStyle=THEME.selLine; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(Math.round(x)+0.5,rect.y); ctx.lineTo(Math.round(x)+0.5,rect.y+rect.h); ctx.stroke();
+  for(const c of CH){ const i=lowerBound(c.xs,t); if(i<0)continue; const v=c.ys[i]; if(Number.isNaN(v))continue; const g=groups[unitToGi[unitKey(c.unit)]]; const y=rect.y+(1-(v-g.min)/((g.max-g.min)||1))*rect.h; ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(x,y,3.5,0,7); ctx.fill(); ctx.strokeStyle="#fff"; ctx.lineWidth=1; ctx.stroke(); }
+  ctx.fillStyle=THEME.selLine; ctx.fillRect(x-7,rect.y,14,13); ctx.fillStyle="#fff"; ctx.font="bold 10px ui-monospace, monospace"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(label,x,rect.y+6);
+}
+function drawOverlay(xPix){
+  const [xmin,xmax]=view, span=(xmax-xmin)||1;
+  let hoverT=null, hoverReads=null;
+  if(cursorPx!=null && cursorPx>=rect.x && cursorPx<=rect.x+rect.w){
+    hoverT=xmin+(cursorPx-rect.x)/rect.w*span;
+    ctx.strokeStyle=THEME.cross; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(Math.round(cursorPx)+0.5,rect.y); ctx.lineTo(Math.round(cursorPx)+0.5,rect.y+rect.h); ctx.stroke(); ctx.setLineDash([]);
+    hoverReads=[];
+    for(const c of CH){ const idx=lowerBound(c.xs,hoverT); const v=idx>=0?c.ys[idx]:NaN; hoverReads.push({c,v});
+      if(idx>=0&&!Number.isNaN(v)){ const g=groups[unitToGi[unitKey(c.unit)]]; const y=rect.y+(1-(v-g.min)/((g.max-g.min)||1))*rect.h; const x=Math.min(Math.max(xPix(c.xs[idx]),rect.x),rect.x+rect.w); ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(x,y,3,0,7); ctx.fill(); } }
+  }
+  if(measureMode){
+    if(markA!=null&&markB!=null){ const xa=rect.x+(markA-xmin)/span*rect.w, xb=rect.x+(markB-xmin)/span*rect.w, l=Math.max(rect.x,Math.min(xa,xb)), r=Math.min(rect.x+rect.w,Math.max(xa,xb)); if(r>l){ ctx.fillStyle="rgba(21,101,192,0.08)"; ctx.fillRect(l,rect.y,r-l,rect.h); } }
+    if(markA!=null) drawMarker(markA,"A");
+    if(markB!=null) drawMarker(markB,"B");
+  }
+  if(measureMode && markA!=null && markB!=null) updateMeasureLegend();
+  else updateLegend(hoverT,hoverReads);
+}
+
+function updateMeasureLegend(){
+  const el=$("#legend");
+  let html=`<span class="meas">A ${fmtTime(markA)}s · B ${fmtTime(markB)}s · </span><span class="t">Δt = ${fmtNum(Math.abs(markB-markA))} s</span>`;
+  for(const c of CH){
+    const ia=lowerBound(c.xs,markA), ib=lowerBound(c.xs,markB);
+    const va=ia>=0?c.ys[ia]:NaN, vb=ib>=0?c.ys[ib]:NaN, d=vb-va, u=c.unit?(" "+c.unit):"";
+    const ds=Number.isNaN(d)?"–":((d>=0?"+":"")+fmtNum(d)+u);
+    const title=`A=${Number.isNaN(va)?"–":fmtNum(va)}  →  B=${Number.isNaN(vb)?"–":fmtNum(vb)}`;
+    
+    // Calculate average value between markers A and B
+    const tMin = Math.min(markA, markB), tMax = Math.max(markA, markB);
+    let sum=0, cnt=0;
+    const startK = Math.max(ia, 0);
+    const endK = Math.min(ib, c.xs.length-1);
+    for(let k=startK; k<=endK; k++){
+      if(c.xs[k] >= tMin && c.xs[k] <= tMax && !Number.isNaN(c.ys[k])){
+        sum += c.ys[k]; cnt++;
+      }
+    }
+    const avg = cnt>0 ? sum/cnt : NaN;
+    const avgStr = Number.isNaN(avg)?"–":fmtNum(avg)+u;
+    
+    html+=`<span class="it" title="${title}"><span class="m" style="background:${c.color}"></span>${c.name}: <span class="d">Δ ${ds}</span>, avg ${avgStr}</span>`;
+  }
+  el.innerHTML=html;
+}
+
+function updateLegend(t,reads){
+  const el=$("#legend");
+  if(!CH.length){ el.innerHTML='<span class="hint">hover the plot to read values at the cursor</span>'; return; }
+  let html = t!=null ? `<span class="t">t = ${fmtTime(t)} s</span>` : `<span class="t">t = –</span>`;
+  for(const c of CH){
+    const r = reads ? reads.find(x=>x.c===c) : null;
+    const vt = c.valTable || null;
+    let vs="–";
+    if(r && !Number.isNaN(r.v)){ vs = (vt&&vt.has(Math.round(r.v))) ? (vt.get(Math.round(r.v))+" ("+Math.round(r.v)+")") : fmtNum(r.v)+(c.unit?(" "+c.unit):""); }
+    html += `<span class="it"><span class="m" style="background:${c.color}"></span>${c.name}: <span class="v">${vs}</span></span>`;
+  }
+  el.innerHTML=html;
+}
+
+/* ---- overview navigator state ---- */
+const ov=$("#ov"), octx=ov.getContext("2d");
+let ovW=0, ovH=0, ovRect={x:0,y:0,w:0,h:0}, ovData=null, ovDrag=null;
+let panDrag=null, panRAF=false;
+
+function paint(){ recompute(); render(); }              // render() also refreshes the overview band
+function paintAll(){ recompute(); buildOverview(); render(); }   // also rebuilds overview mini-traces
+function schedulePan(){ if(panRAF)return; panRAF=true; requestAnimationFrame(()=>{ panRAF=false; recompute(); render(); }); }
+
+function resizeCanvas(){
+  plotW=cv.clientWidth; plotH=cv.clientHeight; DPR=window.devicePixelRatio||1;
+  cv.width=Math.round(plotW*DPR); cv.height=Math.round(plotH*DPR); ctx.setTransform(DPR,0,0,DPR,0,0);
+  ovW=ov.clientWidth; ovH=ov.clientHeight; ov.width=Math.round(ovW*DPR); ov.height=Math.round(ovH*DPR); octx.setTransform(DPR,0,0,DPR,0,0);
+  paintAll();
+}
+function fitAll(){ if(!LOG)return; view=[0,LOG.tmax]; axisRanges={}; paint(); }
+
+/* ---- overview navigator (full-range mini view + current-zoom band) ---- */
+function buildOverview(){
+  if(!CH.length||!LOG){ ovData=null; return; }
+  ovRect={x:rect.x, y:3, w:rect.w, h:Math.max(20,ovH-6)};
+  const x0=0, x1=LOG.tmax||1, span=(x1-x0)||1;
+  const N=Math.max(200,Math.min(2000,Math.round(ovRect.w)));
+  const grid=new Float64Array(N); for(let k=0;k<N;k++) grid[k]=x0+span*k/(N-1);
+  const sum=new Float64Array(N), cnt=new Uint32Array(N), lines=[];
+  for(const c of CH){
+    sum.fill(0); cnt.fill(0); const xs=c.xs, ys=c.ys, L=xs.length;
+    for(let i=0;i<L;i++){ const y=ys[i]; if(Number.isNaN(y))continue; let cell=Math.floor((xs[i]-x0)/span*N); if(cell>=N)cell=N-1; if(cell<0)cell=0; sum[cell]+=y; cnt[cell]++; }
+    const ya=new Float64Array(N); let last=NaN, mn=Infinity, mx=-Infinity;
+    for(let k=0;k<N;k++){ if(cnt[k]>0)last=sum[k]/cnt[k]; ya[k]=last; const v=ya[k]; if(!Number.isNaN(v)){ if(v<mn)mn=v; if(v>mx)mx=v; } }
+    lines.push({color:c.color, ya, mn, mx});
+  }
+  ovData={grid,lines,x0,x1};
+}
+function renderOverview(){
+  if(!octx) return; octx.clearRect(0,0,ovW,ovH);
+  if(!ovData||!LOG||!CH.length) return;
+  const R=ovRect, {grid,lines,x0,x1}=ovData, span=(x1-x0)||1, xp=t=>R.x+(t-x0)/span*R.w;
+  octx.save(); octx.beginPath(); octx.rect(R.x,R.y,R.w,R.h); octx.clip(); octx.globalAlpha=0.55;
+  for(const ln of lines){ const rng=(ln.mx-ln.mn)||1; octx.strokeStyle=ln.color; octx.lineWidth=1; octx.beginPath(); let started=false;
+    for(let k=0;k<grid.length;k++){ const v=ln.ya[k]; if(Number.isNaN(v)){started=false;continue;} const x=xp(grid[k]), y=R.y+R.h-2-((v-ln.mn)/rng)*(R.h-4); if(!started){octx.moveTo(x,y);started=true;}else octx.lineTo(x,y);} octx.stroke(); }
+  octx.restore();
+  octx.strokeStyle=THEME.spine; octx.lineWidth=1; octx.strokeRect(R.x+0.5,R.y+0.5,R.w,R.h);
+  const bx0=xp(Math.max(x0,view[0])), bx1=xp(Math.min(x1,view[1])), bw=Math.max(2,bx1-bx0);
+  octx.fillStyle="rgba(21,101,192,0.13)"; octx.fillRect(bx0,R.y,bw,R.h);
+  octx.strokeStyle=THEME.selLine; octx.strokeRect(bx0+0.5,R.y+0.5,bw-1,R.h-1);
+  octx.fillStyle=THEME.selLine; octx.fillRect(bx0-1,R.y+R.h/2-6,2,12); octx.fillRect(bx0+bw-1,R.y+R.h/2-6,2,12);
+  octx.fillStyle=THEME.text; octx.font="10px ui-monospace, monospace"; octx.textBaseline="bottom";
+  octx.textAlign="left"; octx.fillText(fmtTime(x0), R.x+3, R.y+R.h-2);
+  octx.textAlign="right"; octx.fillText(fmtTime(x1), R.x+R.w-3, R.y+R.h-2);
+}
+
+/* ---- pointer interactions ---- */
+function clampX(px){ return Math.max(rect.x,Math.min(rect.x+rect.w,px)); }
+// which part of the canvas is the cursor over?  plot / x-axis bar / a specific y-axis
+function regionAt(px,py){
+  if(!decim) return null;
+  const inX = px>=rect.x && px<=rect.x+rect.w, inY = py>=rect.y && py<=rect.y+rect.h;
+  if(inX && inY) return {type:"plot"};
+  if(inX && py>rect.y+rect.h && py<=rect.y+rect.h+26) return {type:"x"};
+  if(inY){ for(const g of groups){ if(px>=g.band[0] && px<g.band[1]) return {type:"y",group:g}; } }
+  return null;
+}
+function zoomX(px,f){
+  const [xmin,xmax]=view, span=(xmax-xmin)||1;
+  const t=xmin+(clampX(px)-rect.x)/rect.w*span;        // time under cursor stays fixed
+  let nmin=t-(t-xmin)*f, nmax=t+(xmax-t)*f;
+  nmin=Math.max(0,nmin); nmax=Math.min(LOG.tmax,nmax);
+  if(nmax-nmin < LOG.tmax*1e-5) return false;          // reached max zoom-in
+  if(nmin===xmin && nmax===xmax) return false;         // already full-width — nothing changed
+  view=[nmin,nmax]; return true;
+}
+function zoomY(g,py,f){
+  const cy=Math.max(rect.y,Math.min(rect.y+rect.h,py));
+  const frac=(cy-rect.y)/rect.h, yval=g.max-frac*(g.max-g.min);   // value under cursor stays fixed
+  const nlo=yval-(yval-g.min)*f, nhi=yval+(g.max-yval)*f;
+  if(nhi-nlo>0) axisRanges[g.unit]=[nlo,nhi];
+}
+cv.addEventListener("mousemove",e=>{
+  const r=cv.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top;
+  if(measDrag){ const t=snapT(plotTimeAt(px)); if(measDrag==="A")markA=t; else markB=t; cursorPx=px; render(); return; }
+  if(panDrag){                                  // grab & drag = pan
+    const m=panDrag.mode;
+    if(m==="panX"||m==="panXY"){ const [a,b]=panDrag.v0, span=(b-a)||1, width=b-a; const S=(panDrag.px0-px)/rect.w*span; let nmin=a+S, nmax=b+S; if(nmin<0){nmin=0;nmax=width;} if(nmax>LOG.tmax){nmax=LOG.tmax;nmin=Math.max(0,LOG.tmax-width);} view=[nmin,nmax]; }
+    if(m==="panY"){ const [lo,hi]=panDrag.r0, s=(py-panDrag.py0)/rect.h*(hi-lo); axisRanges[panDrag.unit]=[lo+s,hi+s]; }
+    if(m==="panXY"){ for(const g of panDrag.g0){ const s=(py-panDrag.py0)/rect.h*(g.hi-g.lo); axisRanges[g.unit]=[g.lo+s,g.hi+s]; } }
+    cursorPx=px; schedulePan(); return;
+  }
+  if(dragSel){ dragSel.b=clampX(px); cursorPx=px; render(); return; }
+  const reg=regionAt(px,py);
+  cv.style.cursor = !reg?"default" : reg.type==="x"?"ew-resize" : reg.type==="y"?"ns-resize" : (measureMode?"crosshair":"grab");
+  cursorPx=px; render();
+});
+cv.addEventListener("mouseleave",()=>{ if(!dragSel&&!panDrag&&!measDrag){cursorPx=null; render();} });
+cv.addEventListener("mousedown",e=>{
+  if(!decim)return; const r=cv.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top; const reg=regionAt(px,py);
+  if(!reg||reg.type==="plot"){
+    if(measureMode){                                          // place / grab a measurement marker
+      const grab=nearestMarker(px);
+      if(grab){ measDrag=grab; }
+      else if(markA!=null && markB==null){ markB=snapT(plotTimeAt(px)); measDrag="B"; }   // 2nd click completes the pair
+      else { markA=snapT(plotTimeAt(px)); markB=null; measDrag="B"; }                       // start a fresh measurement
+      cv.style.cursor="crosshair"; render();
+    } else { panDrag={mode:"panXY", px0:px, py0:py, v0:view.slice(), g0:groups.map(g=>({unit:g.unit,lo:g.min,hi:g.max}))}; cv.style.cursor="grabbing"; }
+  }
+  else if(reg.type==="x"){ panDrag={mode:"panX", px0:px, v0:view.slice()}; cv.style.cursor="ew-resize"; }
+  else if(reg.type==="y"){ panDrag={mode:"panY", py0:py, unit:reg.group.unit, r0:[reg.group.min,reg.group.max]}; cv.style.cursor="ns-resize"; }
+});
+window.addEventListener("mouseup",()=>{
+  if(measDrag){ measDrag=null; render(); return; }
+  if(panDrag){ panDrag=null; paint(); return; }
+  if(!dragSel)return; const a=Math.min(dragSel.a,dragSel.b),b=Math.max(dragSel.a,dragSel.b),moved=Math.abs(b-a)>4; dragSel=null;
+  if(moved&&decim){ const [xmin,xmax]=view,span=(xmax-xmin)||1; view=[xmin+(a-rect.x)/rect.w*span, xmin+(b-rect.x)/rect.w*span]; recompute(); } render();
+});
+cv.addEventListener("dblclick",e=>{
+  if(!decim){ fitAll(); return; }
+  const r=cv.getBoundingClientRect(); const reg=regionAt(e.clientX-r.left, e.clientY-r.top);
+  if(!reg||reg.type==="plot"){ fitAll(); }                       // reset everything
+  else if(reg.type==="x"){ view=[0,LOG.tmax]; paint(); }         // reset time only
+  else if(reg.type==="y"){ delete axisRanges[reg.group.unit]; paint(); } // reset that axis only
+});
+cv.addEventListener("wheel",e=>{
+  if(!decim) return; e.preventDefault();
+  const r=cv.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top;
+  const reg=regionAt(px,py); if(!reg) return;
+  const f=e.deltaY<0?0.8:1.25;
+  if(reg.type==="x")      zoomX(px,f);                                  // time axis only
+  else if(reg.type==="y") zoomY(reg.group,py,f);                        // that one y-axis only
+  else { if(zoomX(px,f)) for(const g of groups) zoomY(g,py,f); }        // plot: ratio-locked zoom to cursor; stops when X is full
+  paint();
+},{passive:false});
+
+/* ---- overview navigator interactions: drag band = pan, drag edge = zoom, click = jump ---- */
+function ovBandPx(){ const R=ovRect, x0=ovData.x0, span=(ovData.x1-ovData.x0)||1; return [R.x+(view[0]-x0)/span*R.w, R.x+(view[1]-x0)/span*R.w]; }
+function ovTimeAt(px){ const R=ovRect, span=(ovData.x1-ovData.x0)||1; const cx=Math.max(R.x,Math.min(R.x+R.w,px)); return ovData.x0+(cx-R.x)/R.w*span; }
+ov.addEventListener("mousemove",e=>{
+  if(!ovData||ovDrag) return; const r=ov.getBoundingClientRect(); const px=e.clientX-r.left; const [bx0,bx1]=ovBandPx();
+  ov.style.cursor = (Math.abs(px-bx0)<=5||Math.abs(px-bx1)<=5)?"ew-resize" : (px>bx0&&px<bx1)?"grab" : "pointer";
+});
+ov.addEventListener("mousedown",e=>{
+  if(!ovData||!LOG)return; const r=ov.getBoundingClientRect(); const px=e.clientX-r.left; const x1=ovData.x1; const [bx0,bx1]=ovBandPx();
+  if(Math.abs(px-bx0)<=5) ovDrag={mode:"l"};
+  else if(Math.abs(px-bx1)<=5) ovDrag={mode:"r"};
+  else if(px>bx0&&px<bx1) ovDrag={mode:"move", grabT:ovTimeAt(px), v0:view.slice()};
+  else { const w=view[1]-view[0]; const c=ovTimeAt(px); let nmin=c-w/2,nmax=c+w/2; if(nmin<0){nmin=0;nmax=w;} if(nmax>x1){nmax=x1;nmin=Math.max(0,x1-w);} view=[nmin,nmax]; ovDrag={mode:"move",grabT:ovTimeAt(px),v0:view.slice()}; paint(); }
+  ov.style.cursor="grabbing";
+});
+window.addEventListener("mousemove",e=>{
+  if(!ovDrag||!ovData)return; const r=ov.getBoundingClientRect(); const px=e.clientX-r.left; const x1=ovData.x1; const t=ovTimeAt(px); const minW=(ovData.x1-ovData.x0)*0.002;
+  if(ovDrag.mode==="l"){ let nmin=Math.min(t, view[1]-minW); nmin=Math.max(0,nmin); view=[nmin,view[1]]; }
+  else if(ovDrag.mode==="r"){ let nmax=Math.max(t, view[0]+minW); nmax=Math.min(x1,nmax); view=[view[0],nmax]; }
+  else { const w=ovDrag.v0[1]-ovDrag.v0[0]; let nmin=t-(ovDrag.grabT-ovDrag.v0[0]), nmax=nmin+w; if(nmin<0){nmin=0;nmax=w;} if(nmax>x1){nmax=x1;nmin=Math.max(0,x1-w);} view=[nmin,nmax]; }
+  schedulePan();
+});
+window.addEventListener("mouseup",()=>{ if(ovDrag){ ovDrag=null; ov.style.cursor="grab"; paint(); } });
+
+/* ---------------- channel add / remove ---------------- */
+function channelKey(bus,id,name){ return bus+":"+id+":"+name; }
+function makeChannel(bus,id,msg,dbc,sig){
+  const color=colorPool.shift()||PALETTE[CH.length%PALETTE.length];
+  const d=decodeSignal(busKey(bus,id),msg,sig);
+  return {key:channelKey(bus,id,sig.name),bus,id,name:sig.name,unit:sig.unit,sig,valTable:dbc.parsed.valTables.get(sig.name)||null,color,xs:d.xs,ys:d.ys};
+}
+function toggleSignal(bus,id,msg,dbc,sig,rowEl){
+  const key=channelKey(bus,id,sig.name); const ex=CH.findIndex(c=>c.key===key);
+  if(ex>=0){ colorPool.unshift(CH[ex].color); CH.splice(ex,1); if(rowEl){rowEl.classList.remove("on"); rowEl.querySelector(".sw").style.background="transparent";} }
+  else { const c=makeChannel(bus,id,msg,dbc,sig); CH.push(c); if(rowEl){rowEl.classList.add("on"); rowEl.querySelector(".sw").style.background=c.color;} }
+  view=view||[0,LOG.tmax]; paintAll(); plotButtons();
+}
+function clearPlot(){ for(const c of CH) colorPool.unshift(c.color); CH=[]; axisRanges={};
+  document.querySelectorAll(".sig.on").forEach(el=>{el.classList.remove("on"); el.querySelector(".sw").style.background="transparent";});
+  paintAll(); plotButtons(); }
+
+/* ---------------- sidebar render ---------------- */
+function renderTree(){
+  const tree=$("#tree"); tree.innerHTML="";
+  if(!DBCS.length){ tree.innerHTML='<div class="empty">Load one or more <b>DBC</b> files to see messages and signals.</div>'; return; }
+  if(LOG) renderDerivedGroup(tree);
+  if(!LOG){ const e=document.createElement("div"); e.className="empty"; e.innerHTML='DBC loaded. Now load a <b>log CSV</b> to see its signals.'; tree.appendChild(e); return; }
+  const buses=[...activeByBus.keys()].sort((a,b)=>a-b);
+  if(!buses.length){ const e=document.createElement("div"); e.className="empty"; e.innerHTML='No DBC message IDs matched this log on their assigned bus.<br>Check the DBC / bus assignment (DBCs button, top bar).'; tree.appendChild(e); return; }
+  const q=$("#search").value.trim().toLowerCase(); const multi=buses.length>1; let shown=0;
+  for(const bus of buses){
+    const vis=activeByBus.get(bus).filter(({msg})=> msg.signals.some(s=>!q||s.name.toLowerCase().includes(q)||msg.name.toLowerCase().includes(q)));
+    if(!vis.length) continue;
+    if(multi){ const bh=document.createElement("div"); bh.className="bus-h"; bh.innerHTML=`Bus ${bus} <span>${vis.length} msg</span>`; tree.appendChild(bh); }
+    for(const {id,msg,dbc} of vis) shown+=renderMsgGroup(tree,bus,id,msg,dbc,q);
+  }
+  if(!shown && !DERIVED.length){ const e=document.createElement("div"); e.className="empty"; e.textContent='No signals match “'+q+'”.'; tree.appendChild(e); }
+  updateCollapseLabel();
+}
+function renderMsgGroup(tree,bus,id,msg,dbc,q){
+  const sigs=msg.signals.filter(s=>!q||s.name.toLowerCase().includes(q)||msg.name.toLowerCase().includes(q));
+  if(!sigs.length) return 0;
+  const bkey=busKey(bus,id); const cnt=LOG.byKey.get(bkey)?.length||0;
+  const grp=document.createElement("div"); grp.className="msg-grp";
+  const h=document.createElement("div"); h.className="msg-h";
+  h.innerHTML=`<span class="tw">▾</span><span class="nm">${msg.name}</span><span class="id">0x${id.toString(16).toUpperCase()}</span><span class="cnt">${cnt?cnt.toLocaleString()+" fr":""}</span>`;
+  grp.appendChild(h); const box=document.createElement("div");
+  if(collapsedMsgs.has(bkey)){ h.classList.add("collapsed"); box.style.display="none"; }
+  for(const sig of sigs){
+    const key=channelKey(bus,id,sig.name); const on=CH.some(c=>c.key===key); const cc=CH.find(c=>c.key===key);
+    const row=document.createElement("div"); row.className="sig"+(on?" on":"");
+    row.innerHTML=`<span class="sw" style="background:${on&&cc?cc.color:'transparent'}"></span><span class="sn">${sig.name}</span><span class="un">${sig.unit||""}</span>`;
+    const dq=document.createElement("span"); dq.className="qd"; dq.textContent="Δ"; dq.title="Plot Δ — the difference between consecutive samples of this signal";
+    dq.onclick=e=>{ e.stopPropagation(); addQuickDelta(bus,id,msg,dbc,sig); }; row.appendChild(dq);
+    row.addEventListener("click",()=>toggleSignal(bus,id,msg,dbc,sig,row)); box.appendChild(row);
+  }
+  grp.appendChild(box);
+  h.addEventListener("click",()=>{ const nowCol=!collapsedMsgs.has(bkey); if(nowCol)collapsedMsgs.add(bkey); else collapsedMsgs.delete(bkey); h.classList.toggle("collapsed",nowCol); box.style.display=nowCol?"none":""; updateCollapseLabel(); });
+  tree.appendChild(grp);
+  return 1;
+}
+function updateCollapseLabel(){
+  const ca=$("#collapseAll"); if(!ca) return;
+  if(!DBCS.length||!LOG||!activeMsg.size){ ca.style.display="none"; return; } ca.style.display="";
+  const keys=[...activeMsg.keys()];
+  ca.textContent=(keys.length && keys.every(k=>collapsedMsgs.has(k)))?"expand all":"collapse all";
+}
+
+/* ---------------- file loading ---------------- */
+function setProgress(p){ $("#progress > i").style.width=(p*100).toFixed(1)+"%"; if(p>=1) setTimeout(()=>$("#progress > i").style.width="0",250); }
+function setStatus(t){ $("#status").textContent=t; }
+function refreshStatus(extra){
+  const bits=[];
+  if(DBCS.length)bits.push(`${DBCS.length} DBC${DBCS.length>1?"s":""}`);
+  if(LOG)bits.push(`${LOG.n.toLocaleString()} frames`,`${LOG.buses.length} bus${LOG.buses.length>1?"es":""} (${LOG.buses.join(",")})`,`${LOG.tmax.toFixed(1)} s`);
+  if(CH.length)bits.push(`${CH.length} plotted`);
+  setStatus((extra?extra+"   ·   ":"")+(bits.join("   ·   ")||"ready"));
+}
+async function addDbcFiles(files){
+  for(const f of [...files]){
+    if(!/\.dbc$/i.test(f.name)) continue;
+    const text=await f.text(); const parsed=parseDBC(text);
+    const ex=DBCS.findIndex(d=>d.name===f.name);
+    if(ex>=0) DBCS[ex].parsed=parsed;                 // re-dropped: refresh content, keep scope + position
+    else DBCS.push({name:f.name, parsed, scope:'all'});
+  }
+  onDbcsChanged();
+}
+function onDbcsChanged(){
+  CACHE.clear(); resolveActive(); rebindChannels(); evaluateAllDerived(); syncDerivedChannels();
+  updateDbcButton(); renderDbcManager(); paintAll(); renderTree(); plotButtons(); refreshStatus();
+}
+function rebindChannels(){   // re-resolve plotted signals against the new active set; drop any that no longer resolve
+  for(let i=CH.length-1;i>=0;i--){ const c=CH[i]; if(c.derived) continue;
+    const a=activeMsg.get(busKey(c.bus,c.id)); const sig=a?a.msg.signals.find(s=>s.name===c.name):null;
+    if(sig){ const dec=decodeSignal(busKey(c.bus,c.id),a.msg,sig); c.sig=sig; c.unit=sig.unit; c.valTable=a.dbc.parsed.valTables.get(sig.name)||null; c.xs=dec.xs; c.ys=dec.ys; }
+    else { colorPool.unshift(c.color); CH.splice(i,1); }
+  }
+}
+function updateDbcButton(){
+  $("#dbcMeta").textContent = DBCS.length ? `${DBCS.length} loaded` : "none";
+  $("#dropDbc").classList.toggle("ok", DBCS.length>0);
+}
+/* ---- DBC manager modal ---- */
+function renderDbcManager(){
+  const list=$("#dbcList"); if(!list) return; list.innerHTML="";
+  if(!DBCS.length){ const e=document.createElement("div"); e.className="empty2"; e.textContent="No DBCs yet — add one or more .dbc files."; list.appendChild(e); }
+  DBCS.forEach((d,i)=>{
+    const row=document.createElement("div"); row.className="dbc-row";
+    const ord=document.createElement("div"); ord.className="dord";
+    const up=document.createElement("span"); up.className="ob"+(i===0?" dis":""); up.textContent="▲"; up.title="Raise priority"; up.onclick=()=>moveDbc(i,-1);
+    const dn=document.createElement("span"); dn.className="ob"+(i===DBCS.length-1?" dis":""); dn.textContent="▼"; dn.title="Lower priority"; dn.onclick=()=>moveDbc(i,1);
+    ord.appendChild(up); ord.appendChild(dn);
+    const nm=document.createElement("div"); nm.className="dname"; nm.textContent=d.name; nm.title=`${d.parsed.messages.size} messages`;
+    const sel=document.createElement("select"); sel.className="dbus";
+    const oa=document.createElement("option"); oa.value="all"; oa.textContent="All buses"; sel.appendChild(oa);
+    for(let b=0;b<=7;b++){ const o=document.createElement("option"); o.value=String(b); o.textContent="Bus "+b+((LOG&&LOG.buses.includes(b))?" •":""); sel.appendChild(o); }
+    sel.value=d.scope==='all'?'all':String(d.scope);
+    sel.onchange=()=>{ d.scope=sel.value==='all'?'all':parseInt(sel.value,10); onDbcsChanged(); };
+    const rm=document.createElement("span"); rm.className="drm"; rm.textContent="✕"; rm.title="Remove"; rm.onclick=()=>{ DBCS.splice(i,1); onDbcsChanged(); };
+    row.appendChild(ord); row.appendChild(nm); row.appendChild(sel); row.appendChild(rm);
+    list.appendChild(row);
+  });
+  const hint=$("#dbcHint"); if(hint) hint.innerHTML = LOG ? `Buses present in this log: <b>${LOG.buses.join(", ")||"none"}</b>.  Order = priority (top wins on ID collisions); “All buses” decodes any bus.` : `Load a log CSV to see which buses are present.  Order = priority (top wins on ID collisions).`;
+}
+function moveDbc(i,dir){ const j=i+dir; if(j<0||j>=DBCS.length)return; const t=DBCS[i];DBCS[i]=DBCS[j];DBCS[j]=t; onDbcsChanged(); }
+function openDbcManager(){ renderDbcManager(); $("#dbcModal").classList.remove("hidden"); }
+function closeDbcManager(){ $("#dbcModal").classList.add("hidden"); }
+async function loadCsvFile(file){
+  setStatus("parsing "+file.name+" …"); $("#csvMeta").textContent="…"; const t0=performance.now();
+  LOG=await parseCSV(file,setProgress);
+  CACHE.clear(); CH=[]; colorPool=PALETTE.slice(); view=[0,LOG.tmax]; axisRanges={}; collapsedMsgs.clear();
+  resolveActive();
+  $("#csvMeta").textContent=`${LOG.n.toLocaleString()} fr`; $("#dropCsv").classList.add("ok");
+  evaluateAllDerived();
+  recompute(); buildOverview(); render(); renderTree();
+  plotButtons();
+  refreshStatus(`parsed ${LOG.n.toLocaleString()} frames in ${Math.round(performance.now()-t0)} ms`);
+}
+function routeFiles(fileList){
+  const arr=[...fileList];
+  const dbcs=arr.filter(f=>/\.dbc$/i.test(f.name));
+  const csvs=arr.filter(f=>/\.(csv|txt|log)$/i.test(f.name));
+  if(dbcs.length) addDbcFiles(dbcs);
+  if(csvs.length) loadCsvFile(csvs[0]);
+}
+function wireDrop(el,input){
+  el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("over");});
+  el.addEventListener("dragleave",()=>el.classList.remove("over"));
+  el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("over");routeFiles(e.dataTransfer.files);});
+  input.addEventListener("change",e=>routeFiles(e.target.files));
+}
+wireDrop($("#dropCsv"),$("#fileCsv"));
+$("#dropDbc").addEventListener("dragover",e=>{e.preventDefault();$("#dropDbc").classList.add("over");});
+$("#dropDbc").addEventListener("dragleave",()=>$("#dropDbc").classList.remove("over"));
+$("#dropDbc").addEventListener("drop",e=>{e.preventDefault();$("#dropDbc").classList.remove("over");routeFiles(e.dataTransfer.files);});
+$("#dropDbc").addEventListener("click",openDbcManager);
+$("#dbcAddInput").addEventListener("change",e=>{ addDbcFiles(e.target.files); e.target.value=""; });
+$("#dbcClose").addEventListener("click",closeDbcManager); $("#dbcDone").addEventListener("click",closeDbcManager);
+$("#dbcModal").addEventListener("mousedown",e=>{ if(e.target.id==="dbcModal") closeDbcManager(); });
+["dragover","drop"].forEach(ev=>$("#plotwrap").addEventListener(ev,e=>{ e.preventDefault(); if(ev==="drop")routeFiles(e.dataTransfer.files); }));
+
+$("#search").addEventListener("input",renderTree);
+$("#collapseAll").addEventListener("click",()=>{
+  if(!LOG||!activeMsg.size)return; const keys=[...activeMsg.keys()];
+  const anyExpanded=keys.some(k=>!collapsedMsgs.has(k));
+  if(anyExpanded) keys.forEach(k=>collapsedMsgs.add(k)); else collapsedMsgs.clear();
+  renderTree();
+});
+$("#dSearch").addEventListener("input",renderModalChips);
+$("#btnMeasure").addEventListener("click",()=>{
+  measureMode=!measureMode; $("#btnMeasure").classList.toggle("on",measureMode);
+  if(!measureMode){ markA=markB=null; measDrag=null; }
+  render();
+});
+$("#btnFit").addEventListener("click",fitAll);
+$("#btnClear").addEventListener("click",clearPlot);
+$("#btnPng").addEventListener("click",()=>{
+  if(!decim)return; const out=document.createElement("canvas"); out.width=cv.width; out.height=cv.height;
+  const c2=out.getContext("2d"); c2.fillStyle="#ffffff"; c2.fillRect(0,0,out.width,out.height); c2.drawImage(cv,0,0);
+  const a=document.createElement("a"); a.download="canlog_plot.png"; a.href=out.toDataURL("image/png"); a.click();
+});
+
+/* ============================================================= *
+ *  Derived channels — safe expression engine + evaluation + UI
+ *  Supported: + - * / ^, parentheses, signal refs ("Sig" or "Msg.Sig"),
+ *  point fns (abs sqrt exp ln log sin cos tan floor ceil round sign min max pow clamp),
+ *  series fns over time: delta(x)=consecutive difference, deriv(x)=per-second rate,
+ *  integ(x)=cumulative integral (trapezoid), cumsum(x)=running sum.
+ *  Multi-signal expressions auto-align on the union timebase with sample-and-hold.
+ * ============================================================= */
+function exprTokens(src){
+  const toks=[]; let i=0; const n=src.length;
+  const isd=c=>c>='0'&&c<='9'; const isa=c=>/[A-Za-z_]/.test(c); const isan=c=>/[A-Za-z0-9_.]/.test(c);
+  while(i<n){
+    const c=src[i];
+    if(c===' '||c==='\t'||c==='\n'){i++;continue;}
+    if(isd(c)||(c==='.'&&isd(src[i+1]))){ let j=i+1; while(j<n&&(isd(src[j])||src[j]==='.'||src[j]==='e'||src[j]==='E'||((src[j]==='+'||src[j]==='-')&&(src[j-1]==='e'||src[j-1]==='E')))) j++; toks.push({t:'num',v:parseFloat(src.slice(i,j))}); i=j; continue; }
+    if(isa(c)){ let j=i+1; while(j<n&&isan(src[j])) j++; const name=src.slice(i,j); let k=j; while(k<n&&(src[k]===' '||src[k]==='\t'))k++; toks.push({t: src[k]==='(' ? 'func':'id', v:name}); i=j; continue; }
+    if('+-*/^'.indexOf(c)>=0){ toks.push({t:'op',v:c}); i++; continue; }
+    if(c==='('){ toks.push({t:'lp'}); i++; continue; }
+    if(c===')'){ toks.push({t:'rp'}); i++; continue; }
+    if(c===','){ toks.push({t:'comma'}); i++; continue; }
+    throw new Error("unexpected character: "+c);
+  }
+  return toks;
+}
+const PREC={'u-':5,'^':4,'*':3,'/':3,'+':2,'-':2}, RIGHT={'^':1,'u-':1};
+function toRPN(toks){
+  const out=[],ops=[],argc=[]; let prev=null;
+  for(const tk of toks){
+    if(tk.t==='num'||tk.t==='id'){ out.push(tk); }
+    else if(tk.t==='func'){ ops.push(tk); argc.push(1); }
+    else if(tk.t==='comma'){ while(ops.length&&ops[ops.length-1].t!=='lp') out.push(ops.pop()); if(!ops.length) throw new Error("misplaced comma"); if(argc.length) argc[argc.length-1]++; }
+    else if(tk.t==='op'){ let op=tk.v; const unary= op==='-'&&(prev===null||prev.t==='op'||prev.t==='lp'||prev.t==='comma'||prev.t==='func'); if(unary)op='u-';
+      if(op==='u-'){ ops.push({t:'op',v:'u-'}); }
+      else{ while(ops.length){ const top=ops[ops.length-1]; if(top.t==='op'){ const p1=PREC[op],p2=PREC[top.v]; if(p2>p1||(p2===p1&&!RIGHT[op])){ out.push(ops.pop()); continue; } } break; } ops.push({t:'op',v:op}); } }
+    else if(tk.t==='lp'){ ops.push(tk); }
+    else if(tk.t==='rp'){ while(ops.length&&ops[ops.length-1].t!=='lp') out.push(ops.pop()); if(!ops.length) throw new Error("mismatched parenthesis"); ops.pop(); if(ops.length&&ops[ops.length-1].t==='func'){ const f=ops.pop(); f.n=argc.pop(); out.push(f); } }
+    prev=tk;
+  }
+  while(ops.length){ const o=ops.pop(); if(o.t==='lp') throw new Error("mismatched parenthesis"); out.push(o); }
+  return out;
+}
+function signalNameCount(){ const m=new Map(); if(LOG){ for(const arr of activeByBus.values()){ for(const {msg} of arr){ for(const s of msg.signals) m.set(s.name,(m.get(s.name)||0)+1); } } } return m; }
+function signalRef(msg,sig,counts){ counts=counts||signalNameCount(); return (counts.get(sig.name)>1)?(msg.name+"."+sig.name):sig.name; }
+function resolveSeries(name){
+  if(!LOG||!activeMsg.size) return null;
+  let msgName=null, sigName=name;
+  if(name.indexOf(".")>=0){ const p=name.split("."); msgName=p[0]; sigName=p[1]; }
+  for(const bus of [...activeByBus.keys()].sort((a,b)=>a-b)){
+    for(const {id,msg} of activeByBus.get(bus)){
+      if(msgName && msg.name!==msgName) continue;
+      const sig=msg.signals.find(s=>s.name===sigName);
+      if(sig) return decodeSignal(busKey(bus,id),msg,sig);
+    }
+  }
+  for(const d of DERIVED){ if(d.name===name && d.name!==evaluatingName && !d.error && d.xs && d.xs.length) return {xs:d.xs,ys:d.ys}; }
+  return null;
+}
+function signalRef(msg,sig,counts){ counts=counts||signalNameCount(); return (counts.get(sig.name)>1)?(msg.name+"."+sig.name):sig.name; }
+function resolveSeries(name){
+  if(!LOG||!activeMsg.size) return null;
+  let msgName=null, sigName=name;
+  if(name.indexOf(".")>=0){ const p=name.split("."); msgName=p[0]; sigName=p[1]; }
+  for(const bus of [...activeByBus.keys()].sort((a,b)=>a-b)){
+    for(const {id,msg} of activeByBus.get(bus)){
+      if(msgName && msg.name!==msgName) continue;
+      const sig=msg.signals.find(s=>s.name===sigName);
+      if(sig) return decodeSignal(busKey(bus,id),msg,sig);
+    }
+  }
+  for(const d of DERIVED){ if(d.name===name && d.name!==evaluatingName && !d.error && d.xs && d.xs.length) return {xs:d.xs,ys:d.ys}; }
+  return null;
+}
+const POINTFN={abs:Math.abs,sqrt:Math.sqrt,exp:Math.exp,ln:Math.log,log:Math.log10,sin:Math.sin,cos:Math.cos,tan:Math.tan,floor:Math.floor,ceil:Math.ceil,round:Math.round,sign:Math.sign};
+function alignZOH(xs,ys,t){ const out=new Float64Array(t.length); let idx=0; for(let k=0;k<t.length;k++){ while(idx<xs.length&&xs[idx]<=t[k])idx++; out[k]= idx>0?ys[idx-1]:NaN; } return out; }
+function evalExpr(expr){
+  const rpn=toRPN(exprTokens(expr));
+  const names=[...new Set(rpn.filter(t=>t.t==='id').map(t=>t.v))];
+  if(!names.length) throw new Error("reference at least one signal (e.g. PackVoltage)");
+  const series={};
+  for(const nm of names){ const s=resolveSeries(nm); if(!s) throw new Error("unknown signal: "+nm); if(!s.xs.length) throw new Error("no samples for "+nm); series[nm]=s; }
+  let t;
+  if(names.length===1){ t=series[names[0]].xs; }
+  else{ let total=0; for(const nm of names) total+=series[nm].xs.length; const all=new Float64Array(total); let o=0; for(const nm of names){ all.set(series[nm].xs,o); o+=series[nm].xs.length; } all.sort(); const ded=new Float64Array(total); let m=0; for(let i=0;i<total;i++){ if(i===0||all[i]!==all[i-1]) ded[m++]=all[i]; } t=ded.subarray(0,m); }
+  const T=t.length, aligned={};
+  for(const nm of names) aligned[nm]=(names.length===1)?series[nm].ys:alignZOH(series[nm].xs,series[nm].ys,t);
+  const toArr=o=>{ if(o.k==='a')return o.v; const a=new Float64Array(T); a.fill(o.v); return a; };
+  const st=[];
+  for(const tk of rpn){
+    if(tk.t==='num') st.push({k:'s',v:tk.v});
+    else if(tk.t==='id') st.push({k:'a',v:aligned[tk.v]});
+    else if(tk.t==='op'){
+      if(tk.v==='u-'){ const a=st.pop(); if(a.k==='s')st.push({k:'s',v:-a.v}); else{ const r=new Float64Array(T); for(let i=0;i<T;i++)r[i]=-a.v[i]; st.push({k:'a',v:r}); } }
+      else{ const b=st.pop(),a=st.pop(); st.push(binop(tk.v,a,b,T)); }
+    }
+    else if(tk.t==='func'){ const n=tk.n||0; const args=[]; for(let i=0;i<n;i++) args.unshift(st.pop()); st.push(callFunc(tk.v,args,t,T,toArr)); }
+  }
+  if(st.length!==1) throw new Error("invalid expression");
+  return {xs:t, ys:toArr(st[0])};
+}
+function ap(op,x,y){ switch(op){case'+':return x+y;case'-':return x-y;case'*':return x*y;case'/':return x/y;case'^':return Math.pow(x,y);} }
+function binop(op,a,b,T){ if(a.k==='s'&&b.k==='s')return{k:'s',v:ap(op,a.v,b.v)}; const r=new Float64Array(T),av=a.k==='a'?a.v:null,bv=b.k==='a'?b.v:null; for(let i=0;i<T;i++){ const x=av?av[i]:a.v, y=bv?bv[i]:b.v; r[i]=ap(op,x,y);} return{k:'a',v:r}; }
+function callFunc(name,args,t,T,toArr){
+  if(name in POINTFN){ const f=POINTFN[name],x=args[0]; if(x.k==='s')return{k:'s',v:f(x.v)}; const v=x.v,r=new Float64Array(T); for(let i=0;i<T;i++)r[i]=f(v[i]); return{k:'a',v:r}; }
+  if(name==='min'||name==='max'){ const f=name==='min'?Math.min:Math.max; const as=args.map(toArr),r=new Float64Array(T); for(let i=0;i<T;i++){ let acc=as[0][i]; for(let j=1;j<as.length;j++)acc=f(acc,as[j][i]); r[i]=acc;} return{k:'a',v:r}; }
+  if(name==='pow') return binop('^',args[0],args[1],T);
+  if(name==='clamp'){ const x=toArr(args[0]),lo=toArr(args[1]),hi=toArr(args[2]),r=new Float64Array(T); for(let i=0;i<T;i++)r[i]=Math.min(Math.max(x[i],lo[i]),hi[i]); return{k:'a',v:r}; }
+  if(name==='delta'){ const x=toArr(args[0]),r=new Float64Array(T); r[0]=NaN; for(let i=1;i<T;i++)r[i]=x[i]-x[i-1]; return{k:'a',v:r}; }
+  if(name==='deriv'){ const x=toArr(args[0]),r=new Float64Array(T); r[0]=NaN; for(let i=1;i<T;i++){ const dt=t[i]-t[i-1]; r[i]=dt>0?(x[i]-x[i-1])/dt:NaN;} return{k:'a',v:r}; }
+  if(name==='integ'){ const x=toArr(args[0]),r=new Float64Array(T); let acc=0; r[0]=0; for(let i=1;i<T;i++){ const dt=t[i]-t[i-1]; acc+=((x[i]+x[i-1])/2)*dt; r[i]=acc;} return{k:'a',v:r}; }
+  if(name==='cumsum'){ const x=toArr(args[0]),r=new Float64Array(T); let acc=0; for(let i=0;i<T;i++){ acc+=Number.isNaN(x[i])?0:x[i]; r[i]=acc;} return{k:'a',v:r}; }
+  throw new Error("unknown function: "+name+"()");
+}
+
+/* ---- derived channel lifecycle ---- */
+function evaluateDerived(d){ evaluatingName=d.name; try{ const {xs,ys}=evalExpr(d.expr); d.xs=xs; d.ys=ys; d.error=null; } catch(e){ d.xs=new Float64Array(0); d.ys=new Float64Array(0); d.error=e.message; } evaluatingName=null; }
+function evaluateAllDerived(){
+  // multiple passes so a derived channel can build on another, regardless of definition order
+  for(let pass=0; pass<Math.max(1,DERIVED.length); pass++){
+    let changed=false;
+    for(const d of DERIVED){ const e0=d.error, n0=d.xs?d.xs.length:-1; evaluateDerived(d); if(d.error!==e0 || (d.xs?d.xs.length:-1)!==n0) changed=true; }
+    if(!changed) break;
+  }
+}
+function syncDerivedChannels(){   // push freshly-evaluated data into any plotted derived channels
+  for(const c of CH){ if(!c.derived) continue; const d=DERIVED.find(x=>("D:"+x.id)===c.key); if(d){ c.name=d.name; c.unit=d.unit; c.xs=d.xs; c.ys=d.ys; } }
+}
+function derivedIdx(id){ return CH.findIndex(c=>c.key==="D:"+id); }
+function plotButtons(){ const has=CH.length>0; $("#btnFit").disabled=!has; $("#btnClear").disabled=!has; $("#btnPng").disabled=!has; $("#btnMeasure").disabled=!has;
+  if(!has && measureMode){ measureMode=false; $("#btnMeasure").classList.remove("on"); markA=markB=null; } }
+function toggleDerived(d){
+  const key="D:"+d.id, ex=CH.findIndex(c=>c.key===key);
+  if(ex>=0){ colorPool.unshift(CH[ex].color); CH.splice(ex,1); }
+  else{ if(d.error) return; const color=colorPool.shift()||PALETTE[CH.length%PALETTE.length]; CH.push({key,name:d.name,unit:d.unit,color,xs:d.xs,ys:d.ys,sig:null,derived:true}); }
+  view=view||[0,LOG.tmax]; paintAll(); renderTree(); plotButtons();
+}
+function addQuickDelta(bus,id,msg,dbc,sig){
+  const ref=signalRef(msg,sig); let base="Δ"+sig.name, name=base, k=2;
+  while(DERIVED.some(d=>d.name===name)){ name=base+"_"+k; k++; }
+  const d={id:derivedSeq++, name, unit:sig.unit||"", expr:"delta("+ref+")"};
+  evaluateDerived(d); DERIVED.push(d);
+  if(!d.error) toggleDerived(d); else renderTree();
+}
+function renderDerivedGroup(tree){
+  const grp=document.createElement("div"); grp.className="msg-grp derived-grp";
+  const h=document.createElement("div"); h.className="msg-h";
+  h.innerHTML=`<span class="tw">▾</span><span class="nm">Derived</span>`;
+  const add=document.createElement("span"); add.className="addd"; add.textContent="+ new"; add.title="New derived channel";
+  add.onclick=e=>{ e.stopPropagation(); openDerivedModal(null); }; h.appendChild(add);
+  grp.appendChild(h); const box=document.createElement("div");
+  if(!DERIVED.length){ const e=document.createElement("div"); e.className="empty2"; e.innerHTML='Combine signals, e.g. <code>PackVoltage*PackCurrent</code> — or for a cumulative value use the <b>Δ</b> on a signal, or <code>delta(x)</code> / <code>deriv(x)</code> here.'; box.appendChild(e); }
+  for(const d of DERIVED){
+    const i=derivedIdx(d.id), on=i>=0, cc=on?CH[i]:null;
+    const row=document.createElement("div"); row.className="sig"+(on?" on":"")+(d.error?" err":"");
+    row.innerHTML=`<span class="sw" style="background:${on&&cc?cc.color:'transparent'}"></span><span class="sn">${d.name}</span><span class="un">${d.unit||""}</span>`;
+    const tools=document.createElement("span"); tools.className="rowtools";
+    const ed=document.createElement("span"); ed.className="rt"; ed.textContent="✎"; ed.title="Edit"; ed.onclick=e=>{ e.stopPropagation(); openDerivedModal(d); };
+    const del=document.createElement("span"); del.className="rt"; del.textContent="✕"; del.title="Delete"; del.onclick=e=>{ e.stopPropagation(); editingId=d.id; deleteDerived(); };
+    tools.appendChild(ed); tools.appendChild(del); row.appendChild(tools);
+    row.title=d.error?("Error: "+d.error+"  —  click to edit"):d.expr;
+    row.onclick=()=>{ if(d.error){ openDerivedModal(d); return; } toggleDerived(d); };
+    box.appendChild(row);
+  }
+  grp.appendChild(box);
+  h.addEventListener("click",()=>{ h.classList.toggle("collapsed"); box.style.display=h.classList.contains("collapsed")?"none":""; });
+  tree.appendChild(grp);
+}
+
+/* ---- modal ---- */
+function insertAtCursor(ta,text){ const s=ta.selectionStart,e=ta.selectionEnd,v=ta.value; ta.value=v.slice(0,s)+text+v.slice(e); const p=s+text.length; ta.selectionStart=ta.selectionEnd=p; ta.focus(); }
+function renderModalChips(){
+  const q=(($("#dSearch")&&$("#dSearch").value)||"").trim().toLowerCase();
+  const match=s=>!q||s.toLowerCase().includes(q);
+  const fc=$("#dFuncs"); fc.innerHTML='<span class="lbl">functions</span>';
+  ['delta()','deriv()','integ()','cumsum()','abs()','sqrt()','min()','max()','clamp()','(',')','+','-','*','/'].filter(match).forEach(f=>{
+    const c=document.createElement("span"); c.className="chip fn"; c.textContent=f;
+    c.onclick=()=>{ insertAtCursor($("#dExpr"),f); if(f.endsWith("()")){ const ta=$("#dExpr"); ta.selectionStart=ta.selectionEnd=ta.selectionStart-1; ta.focus(); } };
+    fc.appendChild(c);
+  });
+  const sc=$("#dSigs"); sc.innerHTML='<span class="lbl">signals in this log</span>';
+  if(LOG&&activeMsg.size){ const counts=signalNameCount(), seen=new Set();
+    for(const arr of activeByBus.values()){ for(const {msg} of arr){ for(const sig of msg.signals){ const ref=signalRef(msg,sig,counts); if(seen.has(ref))continue; seen.add(ref); if(!match(ref))continue; const c=document.createElement("span"); c.className="chip"; c.textContent=ref; c.onclick=()=>insertAtCursor($("#dExpr"),ref); sc.appendChild(c); } } }
+  }
+  const others=DERIVED.filter(d=>d.id!==editingId && match(d.name));
+  if(others.length){ const lab=document.createElement("span"); lab.className="lbl"; lab.textContent="derived channels"; sc.appendChild(lab);
+    for(const d of others){ const c=document.createElement("span"); c.className="chip fn"; c.textContent=d.name; c.title=d.expr; c.onclick=()=>insertAtCursor($("#dExpr"),d.name); sc.appendChild(c); } }
+}
+function openDerivedModal(d){
+  editingId=d?d.id:null;
+  $("#dTitle").textContent=d?"Edit derived channel":"New derived channel";
+  $("#dName").value=d?d.name:""; $("#dUnit").value=d?d.unit:""; $("#dExpr").value=d?d.expr:""; $("#dSearch").value="";
+  $("#dDelete").classList.toggle("hidden",!d); $("#dErr").textContent="";
+  renderModalChips(); $("#derivedModal").classList.remove("hidden");
+  setTimeout(()=>$("#dExpr").focus(),0);
+}
+function closeDerivedModal(){ $("#derivedModal").classList.add("hidden"); editingId=null; }
+function saveDerived(){
+  const name=$("#dName").value.trim(), unit=$("#dUnit").value.trim(), expr=$("#dExpr").value.trim();
+  if(!name){ $("#dErr").textContent="name required"; return; }
+  if(!expr){ $("#dErr").textContent="expression required"; return; }
+  try{ const {xs}=evalExpr(expr); if(!xs.length){ $("#dErr").textContent="expression produced no data"; return; } }
+  catch(e){ $("#dErr").textContent=e.message; return; }
+  if(editingId){ const d=DERIVED.find(x=>x.id===editingId); d.name=name; d.unit=unit; d.expr=expr; }
+  else{ DERIVED.push({id:derivedSeq++,name,unit,expr}); }
+  evaluateAllDerived(); syncDerivedChannels();
+  closeDerivedModal(); paintAll(); renderTree();
+}
+function deleteDerived(){ if(editingId==null)return; const id=editingId, ci=derivedIdx(id); if(ci>=0){ colorPool.unshift(CH[ci].color); CH.splice(ci,1); } DERIVED=DERIVED.filter(d=>d.id!==id); evaluateAllDerived(); syncDerivedChannels(); closeDerivedModal(); paintAll(); renderTree(); plotButtons(); }
+$("#dClose").onclick=closeDerivedModal; $("#dCancel").onclick=closeDerivedModal; $("#dSave").onclick=saveDerived; $("#dDelete").onclick=deleteDerived;
+$("#derivedModal").addEventListener("mousedown",e=>{ if(e.target.id==="derivedModal") closeDerivedModal(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(!$("#derivedModal").classList.contains("hidden")) closeDerivedModal(); else if(!$("#dbcModal").classList.contains("hidden")) closeDbcManager(); } });
+
+new ResizeObserver(()=>resizeCanvas()).observe($("#plotwrap"));
+resizeCanvas();
+</script>
+</body>
+</html>
