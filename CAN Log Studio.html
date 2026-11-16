@@ -160,6 +160,7 @@
   .dname{flex:1;font-family:var(--mono);font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dbus{padding:5px 7px;background:var(--panel2);border:1px solid var(--line2);border-radius:6px;color:var(--ink);font-family:var(--ui);font-size:12px;cursor:pointer}
   .dbus:focus{outline:none;border-color:var(--accent)}
+  .dwarn{font-family:var(--ui);font-size:10.5px;color:#b26a00;margin-top:2px;white-space:normal}
   .drm{cursor:pointer;color:var(--ink3);border:1px solid var(--line2);border-radius:5px;padding:1px 7px;font-size:12px}
   .drm:hover{color:#c0392b;border-color:#e2b4b4}
   .addfiles{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:7px 12px;border:1px dashed var(--line2);border-radius:7px;cursor:pointer;color:var(--accent);font-size:12px}
@@ -168,7 +169,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span class="dot"></span>CAN Log Studio <small>v1.2</small></div>
+  <div class="brand"><span class="dot"></span>CAN Log Studio <small>v1.3</small></div>
   <div class="drops">
     <div class="drop" id="dropDbc" title="Manage DBC files and bus assignment — or drop .dbc files here">
       <span>⚙ <b>DBCs</b></span><span class="meta" id="dbcMeta">none</span>
@@ -274,14 +275,21 @@ let view = null;  // [xmin,xmax] seconds
 
 /* ---------------- DBC parser (verified) ---------------- */
 function parseDBC(text){
-  const messages = new Map(); const valTables = new Map(); let cur = null;
+  const messages = new Map(); const valTables = new Map(); const dupes = new Set(); const vals = []; let cur = null;
   const lines = text.split(/\r?\n/);
-  const reSG = /^\s*SG_\s+([\w]+)\s*(?:(M|m\d+)\s+)?:\s*(\d+)\|(\d+)@([01])([+\-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]*)\|([^\]]*)\]\s*"([^"]*)"/;
+  const reSG = /^\s*SG_\s+([\w]+)\s*(?:(M|m\d+M?)\s+)?:\s*(\d+)\|(\d+)@([01])([+\-])\s*\(([^,]+),([^)]+)\)\s*\[([^|]*)\|([^\]]*)\]\s*"([^"]*)"/;
   for (let raw of lines){
+    const tl = raw.trimStart();
     if (raw.startsWith("BO_")){
       const m = raw.match(/^BO_\s+(\d+)\s+([\w]+)\s*:\s*(\d+)/);
-      if (m){ cur = { id:(parseInt(m[1],10)&0x1FFFFFFF), name:m[2], dlc:+m[3], signals:[], mux:null }; messages.set(cur.id,cur);} else cur=null;
-    } else if (raw.trimStart().startsWith("SG_")){
+      if (m){ cur = { id:(parseInt(m[1],10)&0x1FFFFFFF), name:m[2], dlc:+m[3], signals:[], mux:null }; if(messages.has(cur.id)) dupes.add(cur.id); messages.set(cur.id,cur);} else cur=null;
+    } else if (tl.startsWith("VAL_")){
+      // VAL_ is often indented inside message blocks; resolve after all messages are known
+      const m = tl.match(/^VAL_\s+(\d+)\s+([\w]+)\s+(.*?)\s*;?\s*$/);
+      if (m){ const map=new Map(); const re=/(-?)(0x[0-9a-f]+|\d+)\s+"([^"]*)"/gi; let mm;
+        while ((mm=re.exec(m[3]))){ const v=/^0x/i.test(mm[2])?parseInt(mm[2],16):parseInt(mm[2],10); map.set(mm[1]?-v:v,mm[3]); }
+        vals.push({id:parseInt(m[1],10)&0x1FFFFFFF, sig:m[2], map}); }
+    } else if (tl.startsWith("SG_")){
       const m = raw.match(reSG);
       if (m && cur){
         const sig={name:m[1],muxRole:m[2]||null,muxVal:(m[2]&&m[2][0]==='m')?parseInt(m[2].slice(1),10):null,
@@ -289,20 +297,18 @@ function parseDBC(text){
           min:parseFloat(m[9]),max:parseFloat(m[10]),unit:(m[11]||"").trim()};
         cur.signals.push(sig); if (sig.muxRole==="M") cur.mux=sig;
       }
-    } else if (raw.startsWith("VAL_")){
-      const m = raw.match(/^VAL_\s+(\d+)\s+([\w]+)\s+(.*?)\s*;?\s*$/);
-      if (m){ const map=new Map(); const re=/(-?\d+)\s+"([^"]*)"/g; let mm;
-        while ((mm=re.exec(m[3]))) map.set(parseInt(mm[1],10),mm[2]); valTables.set(m[2],map); }
     }
   }
-  return { messages, valTables };
+  // value tables belong to one message's signal; a bare signal name collides across messages
+  for (const v of vals){ valTables.set(v.id+":"+v.sig, v.map); const msg=messages.get(v.id); const s=msg&&msg.signals.find(x=>x.name===v.sig); if(s) s.valTable=v.map; }
+  return { messages, valTables, dupes:[...dupes].sort((a,b)=>a-b) };
 }
 
 /* ---------------- bit extraction (verified against Python round-trip) ---------------- */
 function rawAt(data, base, s){
-  let val=0;
-  if (s.order===1){ for (let i=0;i<s.len;i++){ const bp=s.start+i,by=base+(bp>>3),bit=bp&7; val+=((data[by]>>bit)&1)*Math.pow(2,i);} }
-  else { let by=base+(s.start>>3),bit=s.start&7; for (let i=0;i<s.len;i++){ val=val*2+((data[by]>>bit)&1); if(bit===0){bit=7;by++;}else bit--; } }
+  let val=0; const end=base+7;   // bits past byte 7 read as 0, else a bad DBC layout reads the next frame
+  if (s.order===1){ for (let i=0;i<s.len;i++){ const bp=s.start+i,by=base+(bp>>3),bit=bp&7; if(by<=end) val+=((data[by]>>bit)&1)*Math.pow(2,i);} }
+  else { let by=base+(s.start>>3),bit=s.start&7; for (let i=0;i<s.len;i++){ val=val*2+(by<=end?((data[by]>>bit)&1):0); if(bit===0){bit=7;by++;}else bit--; } }
   if (s.signed && val>=Math.pow(2,s.len-1)) val-=Math.pow(2,s.len);
   return val*s.factor+s.offset;
 }
@@ -341,18 +347,31 @@ async function parseCSV(file, onProgress){
   const dec = new TextDecoder();
   let cap=1<<16; let time=new Float64Array(cap),id=new Uint32Array(cap),bus=new Uint8Array(cap),data=new Uint8Array(cap*8);
   let n=0,t0=null,dirCol=null,read=0; const total=file.size||1; const byKey=new Map(); const busesSeen=new Set();
+  // Plot and decode need non-decreasing time. Logs can roll over a 32-bit µs counter,
+  // print it signed (negative values), or reset their timebase mid-capture.
+  const WRAP32=4294.967296;   // s, rollover period of a 32-bit µs counter
+  let tPrev=-Infinity, tOff=0, nWraps=0, nJumps=0;
   function grow(){const nc=cap*2;const t2=new Float64Array(nc);t2.set(time);time=t2;const i2=new Uint32Array(nc);i2.set(id);id=i2;const u2=new Uint8Array(nc);u2.set(bus);bus=u2;const d2=new Uint8Array(nc*8);d2.set(data);data=d2;cap=nc;}
   function line(ln){
-    if(!ln) return; const c0=ln.charCodeAt(0); if(!(c0>=48&&c0<=57)) return;
+    if(!ln) return; let c0=ln.charCodeAt(0); if(c0===45) c0=ln.charCodeAt(1);   // allow a leading '-' (signed timestamps)
+    if(!(c0>=48&&c0<=57)) return;
     const f=ln.split(","); if(f.length<5) return;
-    const tsStr=f[0]; const ts=tsStr.indexOf(".")>=0?parseFloat(tsStr):parseInt(tsStr,10)/1e6;
+    const tsStr=f[0], isSec=tsStr.indexOf(".")>=0; const ts=isSec?parseFloat(tsStr):parseInt(tsStr,10)/1e6;
     let rid=parseInt(f[1].replace(/^0x/i,""),16); if(isNaN(ts)||isNaN(rid)) return; rid&=0x1FFFFFFF;
     if(dirCol===null) dirCol=/^[rt]x$/i.test((f[3]||"").trim());
     const busIdx=dirCol?4:3, lenIdx=dirCol?5:4;
     let bb=parseInt(f[busIdx],10); if(isNaN(bb)||bb<0)bb=0; if(bb>255)bb=255;
     let len=parseInt(f[lenIdx],10); if(isNaN(len))len=8; len=Math.max(0,Math.min(8,len));
     const b0=lenIdx+1; if(n>=cap)grow(); if(t0===null)t0=ts;
-    time[n]=ts-t0; id[n]=rid; bus[n]=bb; busesSeen.add(bb); const base=n*8;
+    let t=ts-t0+tOff;
+    if(t<tPrev){
+      const tw=t+WRAP32;
+      if(!isSec && tw>=tPrev-1 && tw<=tPrev+60){ tOff+=WRAP32; t=tw; nWraps++; }   // counter rollover: exact correction
+      else if(tPrev-t>1){ tOff+=tPrev-t; t=tPrev; nJumps++; }                       // timebase reset: join the segments end to start
+      if(t<tPrev) t=tPrev;                                                           // small out-of-order step: hold
+    }
+    tPrev=t;
+    time[n]=t; id[n]=rid; bus[n]=bb; busesSeen.add(bb); const base=n*8;
     for(let k=0;k<8;k++) data[base+k]=(k<len)?(parseInt(f[b0+k],16)||0):0;
     const key=bb*0x20000000+rid; let arr=byKey.get(key); if(!arr){arr=[];byKey.set(key,arr);} arr.push(n); n++;
   }
@@ -366,7 +385,7 @@ async function parseCSV(file, onProgress){
   }
   if(rem){ if(rem.charCodeAt(rem.length-1)===13)rem=rem.slice(0,-1); line(rem); }
   const byKeyT=new Map(); for(const[k,a]of byKey) byKeyT.set(k,Uint32Array.from(a));
-  return {time,id,bus,data,n,byKey:byKeyT,buses:[...busesSeen].sort((a,b)=>a-b),tmax:n?time[n-1]:0};
+  return {time,id,bus,data,n,byKey:byKeyT,buses:[...busesSeen].sort((a,b)=>a-b),tmax:n?time[n-1]:0,nWraps,nJumps};
 }
 
 /* ---------------- small helpers ---------------- */
@@ -533,8 +552,8 @@ function updateMeasureLegend(){
     // Calculate average value between markers A and B
     const tMin = Math.min(markA, markB), tMax = Math.max(markA, markB);
     let sum=0, cnt=0;
-    const startK = Math.max(ia, 0);
-    const endK = Math.min(ib, c.xs.length-1);
+    const startK = Math.max(Math.min(ia, ib), 0);   // B can be left of A
+    const endK = Math.min(Math.max(ia, ib), c.xs.length-1);
     for(let k=startK; k<=endK; k++){
       if(c.xs[k] >= tMin && c.xs[k] <= tMax && !Number.isNaN(c.ys[k])){
         sum += c.ys[k]; cnt++;
@@ -556,7 +575,9 @@ function updateLegend(t,reads){
     const r = reads ? reads.find(x=>x.c===c) : null;
     const vt = c.valTable || null;
     let vs="–";
-    if(r && !Number.isNaN(r.v)){ vs = (vt&&vt.has(Math.round(r.v))) ? (vt.get(Math.round(r.v))+" ("+Math.round(r.v)+")") : fmtNum(r.v)+(c.unit?(" "+c.unit):""); }
+    if(r && !Number.isNaN(r.v)){
+      const raw = (vt && c.sig) ? Math.round((r.v-c.sig.offset)/c.sig.factor) : null;   // VAL_ keys are raw values, before factor/offset
+      vs = (raw!=null && vt.has(raw)) ? (vt.get(raw)+" ("+raw+")") : fmtNum(r.v)+(c.unit?(" "+c.unit):""); }
     html += `<span class="it"><span class="m" style="background:${c.color}"></span>${c.name}: <span class="v">${vs}</span></span>`;
   }
   el.innerHTML=html;
@@ -630,7 +651,7 @@ function zoomX(px,f){
   const t=xmin+(clampX(px)-rect.x)/rect.w*span;        // time under cursor stays fixed
   let nmin=t-(t-xmin)*f, nmax=t+(xmax-t)*f;
   nmin=Math.max(0,nmin); nmax=Math.min(LOG.tmax,nmax);
-  if(nmax-nmin < LOG.tmax*1e-5) return false;          // reached max zoom-in
+  if(nmax-nmin < 1e-4) return false;                   // s, max zoom-in; absolute so long logs still zoom to single frames
   if(nmin===xmin && nmax===xmax) return false;         // already full-width — nothing changed
   view=[nmin,nmax]; return true;
 }
@@ -723,7 +744,7 @@ function channelKey(bus,id,name){ return bus+":"+id+":"+name; }
 function makeChannel(bus,id,msg,dbc,sig){
   const color=colorPool.shift()||PALETTE[CH.length%PALETTE.length];
   const d=decodeSignal(busKey(bus,id),msg,sig);
-  return {key:channelKey(bus,id,sig.name),bus,id,name:sig.name,unit:sig.unit,sig,valTable:dbc.parsed.valTables.get(sig.name)||null,color,xs:d.xs,ys:d.ys};
+  return {key:channelKey(bus,id,sig.name),bus,id,name:sig.name,unit:sig.unit,sig,valTable:sig.valTable||null,color,xs:d.xs,ys:d.ys};
 }
 function toggleSignal(bus,id,msg,dbc,sig,rowEl){
   const key=channelKey(bus,id,sig.name); const ex=CH.findIndex(c=>c.key===key);
@@ -809,7 +830,7 @@ function onDbcsChanged(){
 function rebindChannels(){   // re-resolve plotted signals against the new active set; drop any that no longer resolve
   for(let i=CH.length-1;i>=0;i--){ const c=CH[i]; if(c.derived) continue;
     const a=activeMsg.get(busKey(c.bus,c.id)); const sig=a?a.msg.signals.find(s=>s.name===c.name):null;
-    if(sig){ const dec=decodeSignal(busKey(c.bus,c.id),a.msg,sig); c.sig=sig; c.unit=sig.unit; c.valTable=a.dbc.parsed.valTables.get(sig.name)||null; c.xs=dec.xs; c.ys=dec.ys; }
+    if(sig){ const dec=decodeSignal(busKey(c.bus,c.id),a.msg,sig); c.sig=sig; c.unit=sig.unit; c.valTable=sig.valTable||null; c.xs=dec.xs; c.ys=dec.ys; }
     else { colorPool.unshift(c.color); CH.splice(i,1); }
   }
 }
@@ -828,6 +849,9 @@ function renderDbcManager(){
     const dn=document.createElement("span"); dn.className="ob"+(i===DBCS.length-1?" dis":""); dn.textContent="▼"; dn.title="Lower priority"; dn.onclick=()=>moveDbc(i,1);
     ord.appendChild(up); ord.appendChild(dn);
     const nm=document.createElement("div"); nm.className="dname"; nm.textContent=d.name; nm.title=`${d.parsed.messages.size} messages`;
+    const dup=d.parsed.dupes||[];
+    if(dup.length){ const w=document.createElement("div"); w.className="dwarn"; w.textContent=`⚠ ${dup.length} duplicate ID${dup.length>1?"s":""}, last definition used`;
+      w.title=dup.map(x=>"0x"+x.toString(16).toUpperCase()).join(", "); nm.appendChild(w); }
     const sel=document.createElement("select"); sel.className="dbus";
     const oa=document.createElement("option"); oa.value="all"; oa.textContent="All buses"; sel.appendChild(oa);
     for(let b=0;b<=7;b++){ const o=document.createElement("option"); o.value=String(b); o.textContent="Bus "+b+((LOG&&LOG.buses.includes(b))?" •":""); sel.appendChild(o); }
@@ -846,12 +870,14 @@ async function loadCsvFile(file){
   setStatus("parsing "+file.name+" …"); $("#csvMeta").textContent="…"; const t0=performance.now();
   LOG=await parseCSV(file,setProgress);
   CACHE.clear(); CH=[]; colorPool=PALETTE.slice(); view=[0,LOG.tmax]; axisRanges={}; collapsedMsgs.clear();
+  markA=markB=null; measDrag=null;
   resolveActive();
   $("#csvMeta").textContent=`${LOG.n.toLocaleString()} fr`; $("#dropCsv").classList.add("ok");
   evaluateAllDerived();
   recompute(); buildOverview(); render(); renderTree();
   plotButtons();
-  refreshStatus(`parsed ${LOG.n.toLocaleString()} frames in ${Math.round(performance.now()-t0)} ms`);
+  const tfix=[]; if(LOG.nWraps) tfix.push(`${LOG.nWraps} timestamp rollover${LOG.nWraps>1?"s":""} corrected`); if(LOG.nJumps) tfix.push(`${LOG.nJumps} timestamp jump${LOG.nJumps>1?"s":""} joined`);
+  refreshStatus(`parsed ${LOG.n.toLocaleString()} frames in ${Math.round(performance.now()-t0)} ms`+(tfix.length?"   ·   "+tfix.join(", "):""));
 }
 function routeFiles(fileList){
   const arr=[...fileList];
@@ -864,7 +890,7 @@ function wireDrop(el,input){
   el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("over");});
   el.addEventListener("dragleave",()=>el.classList.remove("over"));
   el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("over");routeFiles(e.dataTransfer.files);});
-  input.addEventListener("change",e=>routeFiles(e.target.files));
+  input.addEventListener("change",e=>{ routeFiles(e.target.files); e.target.value=""; });   // reset so the same file can be reloaded
 }
 wireDrop($("#dropCsv"),$("#fileCsv"));
 $("#dropDbc").addEventListener("dragover",e=>{e.preventDefault();$("#dropDbc").classList.add("over");});
@@ -954,21 +980,6 @@ function resolveSeries(name){
   for(const d of DERIVED){ if(d.name===name && d.name!==evaluatingName && !d.error && d.xs && d.xs.length) return {xs:d.xs,ys:d.ys}; }
   return null;
 }
-function signalRef(msg,sig,counts){ counts=counts||signalNameCount(); return (counts.get(sig.name)>1)?(msg.name+"."+sig.name):sig.name; }
-function resolveSeries(name){
-  if(!LOG||!activeMsg.size) return null;
-  let msgName=null, sigName=name;
-  if(name.indexOf(".")>=0){ const p=name.split("."); msgName=p[0]; sigName=p[1]; }
-  for(const bus of [...activeByBus.keys()].sort((a,b)=>a-b)){
-    for(const {id,msg} of activeByBus.get(bus)){
-      if(msgName && msg.name!==msgName) continue;
-      const sig=msg.signals.find(s=>s.name===sigName);
-      if(sig) return decodeSignal(busKey(bus,id),msg,sig);
-    }
-  }
-  for(const d of DERIVED){ if(d.name===name && d.name!==evaluatingName && !d.error && d.xs && d.xs.length) return {xs:d.xs,ys:d.ys}; }
-  return null;
-}
 const POINTFN={abs:Math.abs,sqrt:Math.sqrt,exp:Math.exp,ln:Math.log,log:Math.log10,sin:Math.sin,cos:Math.cos,tan:Math.tan,floor:Math.floor,ceil:Math.ceil,round:Math.round,sign:Math.sign};
 function alignZOH(xs,ys,t){ const out=new Float64Array(t.length); let idx=0; for(let k=0;k<t.length;k++){ while(idx<xs.length&&xs[idx]<=t[k])idx++; out[k]= idx>0?ys[idx-1]:NaN; } return out; }
 function evalExpr(expr){
@@ -1005,7 +1016,7 @@ function callFunc(name,args,t,T,toArr){
   if(name==='clamp'){ const x=toArr(args[0]),lo=toArr(args[1]),hi=toArr(args[2]),r=new Float64Array(T); for(let i=0;i<T;i++)r[i]=Math.min(Math.max(x[i],lo[i]),hi[i]); return{k:'a',v:r}; }
   if(name==='delta'){ const x=toArr(args[0]),r=new Float64Array(T); r[0]=NaN; for(let i=1;i<T;i++)r[i]=x[i]-x[i-1]; return{k:'a',v:r}; }
   if(name==='deriv'){ const x=toArr(args[0]),r=new Float64Array(T); r[0]=NaN; for(let i=1;i<T;i++){ const dt=t[i]-t[i-1]; r[i]=dt>0?(x[i]-x[i-1])/dt:NaN;} return{k:'a',v:r}; }
-  if(name==='integ'){ const x=toArr(args[0]),r=new Float64Array(T); let acc=0; r[0]=0; for(let i=1;i<T;i++){ const dt=t[i]-t[i-1]; acc+=((x[i]+x[i-1])/2)*dt; r[i]=acc;} return{k:'a',v:r}; }
+  if(name==='integ'){ const x=toArr(args[0]),r=new Float64Array(T); let acc=0; r[0]=0; for(let i=1;i<T;i++){ const dt=t[i]-t[i-1], a=(x[i]+x[i-1])/2; if(!Number.isNaN(a)) acc+=a*dt; r[i]=acc;} return{k:'a',v:r}; }   // skip NaN gaps: a signal is NaN until its first frame on a shared timebase
   if(name==='cumsum'){ const x=toArr(args[0]),r=new Float64Array(T); let acc=0; for(let i=0;i<T;i++){ acc+=Number.isNaN(x[i])?0:x[i]; r[i]=acc;} return{k:'a',v:r}; }
   throw new Error("unknown function: "+name+"()");
 }
